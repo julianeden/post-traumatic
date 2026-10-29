@@ -14,6 +14,9 @@
   const MOBILE_QUERY = "(max-width: 820px)";
   const CALENDAR_WAIT_MS = 30000;
   const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  // Views listed in the first dropdown, by label after the prefix is removed.
+  const COMMON_VIEWS = ["individual month view", "available open shifts", "als", "bls", "details", "dispatch"];
+  const VIEW_PREFIX = /^vehicle\/location month view\s*-\s*/i;
   const html = document.documentElement;
 
   // Progress notes go to the console (filter on "Traumasoft Mobile").
@@ -124,21 +127,77 @@
 
     const viewCell = viewSelect.closest("td");
     viewCell.classList.add("tsm-toolbar-view");
-    // "View:" is a bare text node before the select; give it a label so it
-    // can be styled and tapped.
+    // Drop the bare "View:" text; the new dropdowns carry their own labels.
     for (const node of [...viewCell.childNodes]) {
-      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
-        const label = document.createElement("label");
-        label.htmlFor = "view_select";
-        label.className = "tsm-label";
-        label.textContent = node.textContent.trim().replace(/:$/, "");
-        node.replaceWith(label);
-        break;
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) node.remove();
+    }
+    // The original select stays (hidden) because the form posts its value.
+    viewSelect.classList.add("tsm-hidden");
+    buildViewPickers(viewSelect, viewCell);
+
+    const monthSelect = document.getElementById("StartMonth");
+    const yearSelect = document.getElementById("StartYear");
+    const goButton = document.getElementById("submit_form");
+    if (monthSelect) monthSelect.closest("td")?.classList.add("tsm-toolbar-nav");
+
+    // The page's <form> is written inside a table row, so its controls are
+    // only tied to it by a parser quirk. Tie them explicitly as well.
+    const form = document.getElementById("calendar_select");
+    if (form && form.id) {
+      for (const control of [viewSelect, monthSelect, yearSelect, goButton]) {
+        if (control && control.form !== form) control.setAttribute("form", form.id);
       }
     }
 
-    const monthSelect = document.getElementById("StartMonth");
-    if (monthSelect) monthSelect.closest("td")?.classList.add("tsm-toolbar-nav");
+    for (const select of [monthSelect, yearSelect]) {
+      select?.addEventListener("change", submitCalendar);
+    }
+  }
+
+  function buildViewPickers(viewSelect, cell) {
+    const options = [...viewSelect.options].map((o) => ({
+      value: o.value,
+      label: o.textContent.trim().replace(VIEW_PREFIX, ""),
+      selected: o.selected,
+    }));
+    const common = options.filter((o) => COMMON_VIEWS.includes(o.label.toLowerCase()));
+    const other = options.filter((o) => !common.includes(o));
+
+    const wrap = el("div", "tsm-viewpick");
+    const group = (labelText, opts) => {
+      const box = el("div", "tsm-viewpick-group");
+      const select = document.createElement("select");
+      select.className = "tsm-viewselect";
+      const placeholder = new Option("Choose a view…", "");
+      placeholder.hidden = true;
+      select.append(placeholder);
+      for (const o of opts) select.append(new Option(o.label, o.value));
+      const current = opts.find((o) => o.selected);
+      select.value = current ? current.value : "";
+      select.addEventListener("change", () => {
+        if (!select.value) return;
+        viewSelect.value = select.value;
+        // Runs the page's own onchange, which points the form at this view.
+        viewSelect.dispatchEvent(new Event("change", { bubbles: true }));
+        submitCalendar();
+      });
+      box.append(el("label", "tsm-label", labelText), select);
+      return box;
+    };
+    if (common.length) wrap.append(group("Common Schedule Views", common));
+    if (other.length) wrap.append(group("Other Schedule Views", other));
+    cell.append(wrap);
+  }
+
+  // Same as pressing the page's Go button.
+  function submitCalendar() {
+    const go = document.getElementById("submit_form");
+    if (go) {
+      go.click();
+      return;
+    }
+    const form = document.getElementById("calendar_select");
+    if (form) form.requestSubmit();
   }
 
   function findUserName() {

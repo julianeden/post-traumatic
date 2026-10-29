@@ -137,7 +137,19 @@ html[data-tsm="on"] .tsm-label {
   margin-bottom: 4px;
 }
 
-html[data-tsm="on"] #view_select {
+/* the page's own view select and Go button keep working, unseen */
+html[data-tsm="on"] #view_select.tsm-hidden,
+html[data-tsm="on"] #submit_form {
+  display: none !important;
+}
+
+html[data-tsm="on"] .tsm-viewpick {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html[data-tsm="on"] .tsm-viewselect {
   width: 100%;
   font-size: 16px;
   padding: 10px 12px;

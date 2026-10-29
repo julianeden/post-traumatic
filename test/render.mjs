@@ -50,6 +50,10 @@ for (const file of pages) {
   });
   const page = await context.newPage();
   page.on("dialog", (d) => d.dismiss());
+  page.on("console", (msg) => {
+    const text = msg.text();
+    if (text.includes("[Traumasoft Mobile]")) console.log(`  console: ${text.replace("[Traumasoft Mobile] ", "")}`);
+  });
   await page.goto("file://" + join(fixtures, file), { waitUntil: "load", timeout: 60_000 });
 
   const before = await page.evaluate(() => ({
@@ -88,6 +92,7 @@ for (const file of pages) {
     console.log("  (no calendar on this page; chrome styling only)");
   } else {
     if (!after.active) fail("add-on did not activate");
+    if (after.active && after.mode === "none") fail("add-on activated but set no mode (init threw; see console lines above)");
     if (after.scrollWidth > VIEWPORT.width) fail(`page still overflows: scrollWidth ${after.scrollWidth} > ${VIEWPORT.width}`);
     if (after.overflowing.length) fail(`elements past the right edge: ${after.overflowing.join(" | ")}`);
     if (after.handlers !== before.handlers) fail(`pickup handlers changed: ${before.handlers} -> ${after.handlers}`);
@@ -96,6 +101,49 @@ for (const file of pages) {
       if (after.chips !== before.days) fail(`expected ${before.days} day chips, got ${after.chips}`);
     }
     if (after.mode === "agenda" && after.visibleDays !== before.days) fail(`agenda should show all ${before.days} days, shows ${after.visibleDays}`);
+  }
+
+  // View pickers and auto-submit. A submit listener swallows the navigation
+  // and records what the form was about to post.
+  const toolbar = await page.evaluate(() => {
+    const form = document.getElementById("calendar_select");
+    const log = [];
+    if (form) form.addEventListener("submit", (e) => { e.preventDefault(); log.push(form.action); });
+    window.__tsmSubmits = log;
+    const selects = [...document.querySelectorAll(".tsm-viewselect")];
+    const labels = [...document.querySelectorAll(".tsm-viewpick .tsm-label")].map((l) => l.textContent);
+    const commonOpts = selects[0] ? [...selects[0].options].filter((o) => o.value).map((o) => o.text) : [];
+    const otherOpts = selects[1] ? [...selects[1].options].filter((o) => o.value).map((o) => o.text) : [];
+    return { count: selects.length, labels, commonOpts, otherOpts, goVisible: Boolean(document.getElementById("submit_form")?.offsetParent) };
+  });
+  if (toolbar.count) {
+    console.log(`  view pickers: ${toolbar.labels.join(" / ")}; common = ${toolbar.commonOpts.join(", ")}; other = ${toolbar.otherOpts.length} views`);
+    if (toolbar.count !== 2) fail(`expected 2 view pickers, got ${toolbar.count}`);
+    if (toolbar.goVisible) fail("Go button still visible");
+    if (toolbar.commonOpts.some((t) => /Vehicle\/Location/i.test(t)) || toolbar.otherOpts.some((t) => /Vehicle\/Location/i.test(t))) fail("prefix not stripped from view names");
+    const expectedCommon = ["Individual Month View", "Available Open Shifts", "ALS", "BLS", "Details", "Dispatch"];
+    if (JSON.stringify(toolbar.commonOpts) !== JSON.stringify(expectedCommon)) fail(`common views are ${toolbar.commonOpts.join(", ")}`);
+
+    // choose BLS in the common picker
+    const bls = await page.evaluate(() => {
+      const sel = document.querySelector(".tsm-viewselect");
+      const opt = [...sel.options].find((o) => o.text === "BLS");
+      sel.value = opt.value;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      return { hidden: document.getElementById("view_select").value, chosen: opt.value, submits: window.__tsmSubmits.slice() };
+    });
+    if (bls.hidden !== bls.chosen) fail("choosing a view did not update the page's own select");
+    if (bls.submits.length !== 1 || !bls.submits[0].includes("template_id=59")) fail(`view change did not submit to the BLS view: ${bls.submits.join(" | ")}`);
+
+    // change the month
+    const month = await page.evaluate(() => {
+      const sel = document.getElementById("StartMonth");
+      sel.value = sel.value === "11" ? "12" : "11";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      return window.__tsmSubmits.length;
+    });
+    if (month !== 2) fail("changing the month did not submit the form");
+    else console.log(`  view change and month change both submitted the form (${bls.submits[0].replace(/^.*main\.php/, "main.php")})`);
   }
 
   await page.screenshot({ path: join(outDir, `${name}-after-top.png`) });
