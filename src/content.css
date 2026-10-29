@@ -1,0 +1,930 @@
+/* Traumasoft Mobile Schedule.
+   Every rule is scoped to html.tsm, which content.js adds only on the
+   schedule calendar page at phone widths. html.tsm-agenda is the
+   "Individual Month View"; html.tsm-location is a "Vehicle/Location" view. */
+
+/* ---------- page frame ---------- */
+
+html.tsm #main-wrapper {
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+html.tsm #main-content {
+  width: auto !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 8px 12px 28px !important;
+  border-radius: 0 !important;
+  background: #f6f7f9;
+}
+
+html.tsm #user_content,
+html.tsm #user_content td,
+html.tsm #user_content div:not(.v-application * div) {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+html.tsm #user_content {
+  width: 100% !important;
+}
+
+html.tsm #user_content table {
+  width: 100% !important;
+  max-width: 100%;
+  table-layout: auto;
+}
+
+html.tsm #user_content td[width],
+html.tsm #user_content table[width] {
+  width: auto !important;
+}
+
+html.tsm #user_content br {
+  display: none;
+}
+
+/* The info row is three side-by-side cells (facts, spacer, filler);
+   stack the first and drop the rest so the quick links get the full width. */
+html.tsm #user_content td[width="550"] {
+  display: block;
+  width: auto !important;
+}
+
+html.tsm #user_content td[width="550"] ~ td {
+  display: none;
+}
+
+/* section headings */
+html.tsm td.std_header {
+  background: none !important;
+  color: #6b7280 !important;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  height: auto !important;
+  padding: 16px 0 4px !important;
+}
+
+/* quick links become tappable rows */
+html.tsm #user_content td.indent:has(> a) {
+  padding: 0 !important;
+}
+
+html.tsm #user_content td.indent > a {
+  display: block;
+  padding: 12px 14px;
+  margin: 4px 0;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  color: #003060;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+html.tsm #user_content td.indent > a::after {
+  content: "›";
+  float: right;
+  color: #9ca3af;
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* the "General Schedule" facts */
+html.tsm td.data_field {
+  border: 0 !important;
+  background: none !important;
+  color: #003060 !important;
+  font-weight: 700;
+  white-space: nowrap;
+  padding: 0 0 0 6px !important;
+}
+
+/* ---------- toolbar: view, legend, month/year ---------- */
+
+html.tsm table:has(> tbody > tr.tsm-toolbar),
+html.tsm table:has(> tbody > tr.tsm-toolbar) > tbody {
+  display: block;
+}
+
+html.tsm tr.tsm-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 2px 0 6px;
+}
+
+html.tsm tr.tsm-toolbar > td {
+  display: block;
+  width: auto !important;
+  padding: 0 !important;
+  text-align: left !important;
+}
+
+html.tsm .tsm-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+html.tsm #view_select {
+  width: 100%;
+  font-size: 16px;
+  padding: 10px 12px;
+  border: 1px solid #cfd4db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+}
+
+html.tsm td.tsm-toolbar-nav {
+  display: flex !important;
+  gap: 8px;
+  align-items: stretch;
+}
+
+html.tsm td.tsm-toolbar-nav select {
+  flex: 1 1 0;
+  min-width: 0;
+  font-size: 16px;
+  padding: 10px 8px;
+  border: 1px solid #cfd4db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+}
+
+html.tsm #submit_form {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: #003060;
+  border: 0;
+  border-radius: 10px;
+}
+
+html.tsm .calendar-legend {
+  width: auto !important;
+  flex-wrap: wrap;
+  row-gap: 4px;
+  background: none !important;
+  padding: 0 !important;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+html.tsm .calendar-legend-color {
+  border-radius: 3px;
+}
+
+/* ---------- month table, shared ---------- */
+
+html.tsm table.month,
+html.tsm table.month > tbody,
+html.tsm table.month > tbody > tr {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  border: 0 !important;
+}
+
+html.tsm table.month td {
+  font-size: 14px;
+}
+
+html.tsm td.monthname {
+  display: block;
+  border: 0 !important;
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+  padding: 10px 0 8px !important;
+}
+
+html.tsm td.dayname,
+html.tsm td.nomonthday {
+  display: none !important;
+}
+
+html.tsm table.eventcontent {
+  margin: 0 !important;
+}
+
+html.tsm td[id^="day_"] {
+  display: block;
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  text-align: left !important;
+  vertical-align: top;
+  padding: 0 !important;
+  /* --tsm-tint carries any inline colour the site put on the cell */
+  background-color: color-mix(in srgb, var(--tsm-tint, transparent) 22%, transparent) !important;
+  box-shadow: inset 4px 0 0 var(--tsm-tint, transparent);
+}
+
+html.tsm .tsm-dayhead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  padding-top: 2px;
+}
+
+html.tsm .tsm-weekday {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html.tsm .tsm-daynum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: 2px;
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+}
+
+html.tsm .tsm-daylong {
+  display: none;
+}
+
+/* ---------- agenda view: your own shifts ---------- */
+
+html.tsm-agenda td[id^="day_"] {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+  padding: 8px 0 8px 4px !important;
+  border-top: 1px solid #e5e7eb !important;
+}
+
+html.tsm-agenda .tsm-today .tsm-daynum {
+  background: #003060;
+  color: #fff;
+}
+
+html.tsm-agenda .tsm-today .tsm-weekday {
+  color: #003060;
+}
+
+html.tsm-agenda .tsm-past .tsm-dayhead {
+  opacity: 0.6;
+}
+
+html.tsm-agenda .tsm-past .tsm-shift {
+  background: #f9fafb;
+  color: #6b7280;
+}
+
+html.tsm-agenda .tsm-past .tsm-shift-main > td:first-child,
+html.tsm-agenda .tsm-past .tsm-shift-main > td.timerange {
+  color: #6b7280;
+}
+
+html.tsm-agenda td.tsm-empty {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 5px 0 5px 4px !important;
+}
+
+html.tsm-agenda td.tsm-empty .tsm-dayhead {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+}
+
+html.tsm-agenda td.tsm-empty .tsm-weekday {
+  font-size: 10px;
+  width: 30px;
+}
+
+html.tsm-agenda td.tsm-empty .tsm-daynum {
+  width: auto;
+  height: auto;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+html.tsm-agenda td.tsm-empty.tsm-today .tsm-daynum {
+  color: #003060;
+  font-weight: 800;
+}
+
+html.tsm-agenda td.tsm-empty table.eventcontent {
+  display: none;
+}
+
+html.tsm-agenda table.eventcontent,
+html.tsm-agenda table.eventcontent > tbody,
+html.tsm-agenda table.eventcontent > tbody > tr,
+html.tsm-agenda table.eventcontent > tbody > tr > td {
+  display: block;
+  width: auto !important;
+  min-width: 0;
+  padding: 0 !important;
+}
+
+html.tsm-agenda .tsm-shift {
+  display: block;
+  width: auto !important;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+html.tsm-agenda .tsm-shift > tbody {
+  display: block;
+}
+
+html.tsm-agenda .tsm-shift-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+html.tsm-agenda .tsm-shift-main > td {
+  display: block;
+  padding: 0 !important;
+  white-space: normal;
+}
+
+html.tsm-agenda .tsm-shift-main > td:first-child {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+html.tsm-agenda .tsm-shift-main > td.timerange {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #374151;
+}
+
+html.tsm-agenda .tsm-shift-details {
+  display: block;
+}
+
+html.tsm-agenda .tsm-shift-details > td {
+  display: block;
+  padding: 4px 0 0 !important;
+  font-size: 13px;
+  line-height: 1.35;
+  color: #4b5563;
+}
+
+html.tsm-agenda .tsm-spacer {
+  display: none;
+}
+
+html.tsm .tsm-fab {
+  position: fixed;
+  right: 14px;
+  bottom: 18px;
+  z-index: 30;
+  padding: 12px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: #003060;
+  color: #fff;
+  font: 700 14px system-ui, -apple-system, Roboto, sans-serif;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* ---------- location view: every unit, one day at a time ---------- */
+
+html.tsm-location td.monthname {
+  display: none;
+}
+
+html.tsm-location td[id^="day_"]:not(.tsm-selected) {
+  display: none !important;
+}
+
+html.tsm .tsm-pager {
+  position: sticky;
+  top: 48px;
+  z-index: 20;
+  margin: 0 -12px;
+  padding: 8px 12px 8px;
+  background: #f6f7f9;
+  border-bottom: 1px solid #e5e7eb;
+  /* The pager lives inside a table cell; without this the chip strip's
+     full width would be used to size the cell. */
+  contain: inline-size;
+}
+
+html.tsm .tsm-pager-title {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+}
+
+html.tsm .tsm-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+html.tsm .tsm-navbtn {
+  flex: 0 0 34px;
+  height: 56px;
+  padding: 0;
+  border: 1px solid #cfd4db;
+  border-radius: 10px;
+  background: #fff;
+  color: #003060;
+  font-size: 24px;
+  line-height: 1;
+}
+
+html.tsm .tsm-navbtn:disabled {
+  opacity: 0.35;
+}
+
+html.tsm .tsm-strip {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+html.tsm .tsm-strip::-webkit-scrollbar {
+  display: none;
+}
+
+html.tsm .tsm-chip {
+  position: relative;
+  flex: 0 0 46px;
+  height: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0;
+  border: 1px solid #d9dce1;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  scroll-snap-align: center;
+}
+
+html.tsm .tsm-chip-wd {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html.tsm .tsm-chip-num {
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+html.tsm .tsm-chip-open {
+  min-width: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: #6eb53f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 14px;
+}
+
+html.tsm .tsm-chip-mine {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #003060;
+}
+
+html.tsm .tsm-chip-past {
+  opacity: 0.5;
+}
+
+html.tsm .tsm-chip-today {
+  border-color: #003060;
+  box-shadow: inset 0 0 0 1px #003060;
+}
+
+html.tsm .tsm-chip-selected {
+  background: #003060;
+  border-color: #003060;
+  color: #fff;
+  opacity: 1;
+}
+
+html.tsm .tsm-chip-selected .tsm-chip-wd {
+  color: #c7d2e3;
+}
+
+html.tsm .tsm-chip-selected .tsm-chip-mine {
+  background: #fff;
+}
+
+html.tsm .tsm-filters {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+html.tsm .tsm-filter {
+  flex: 1 1 0;
+  padding: 8px 6px;
+  border: 1px solid #cfd4db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  font: 600 13px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html.tsm .tsm-filter-active {
+  background: #003060;
+  border-color: #003060;
+  color: #fff;
+}
+
+html.tsm .tsm-search {
+  position: relative;
+  margin-top: 8px;
+}
+
+html.tsm .tsm-search-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 40px 10px 12px;
+  border: 1px solid #cfd4db;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font: 15px system-ui, -apple-system, Roboto, sans-serif;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+html.tsm .tsm-search-input::-webkit-search-cancel-button,
+html.tsm .tsm-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+html.tsm .tsm-search-active .tsm-search-input {
+  border-color: #d97706;
+  box-shadow: inset 0 0 0 1px #d97706;
+}
+
+html.tsm .tsm-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  margin-top: -15px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 20px;
+  line-height: 1;
+  display: none;
+}
+
+html.tsm .tsm-search-active .tsm-search-clear {
+  display: block;
+}
+
+html.tsm .tsm-chip-name {
+  min-width: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: #d97706;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 14px;
+}
+
+html.tsm .tsm-chip-name[hidden] {
+  display: none;
+}
+
+html.tsm-filter-name .tsm-chip:not(.tsm-chip-has-match):not(.tsm-chip-selected) {
+  opacity: 0.3;
+}
+
+html.tsm-filter-name .tsm-unit:not(.tsm-match) {
+  display: none !important;
+}
+
+html.tsm-location tr.tsm-match-slot > td:first-child {
+  font-weight: 800;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 1px 6px !important;
+  margin-left: -6px;
+}
+
+html.tsm .tsm-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+html.tsm-location td.tsm-selected {
+  display: block;
+  padding-top: 6px !important;
+}
+
+html.tsm-location .tsm-dayhead {
+  display: block;
+  margin: 6px 0 8px;
+  padding: 0;
+}
+
+html.tsm-location .tsm-weekday,
+html.tsm-location .tsm-daynum {
+  display: none;
+}
+
+html.tsm-location .tsm-daylong {
+  display: block;
+  font-size: 17px;
+  font-weight: 800;
+  color: #111827;
+}
+
+html.tsm-location table.eventcontent,
+html.tsm-location table.eventcontent > tbody {
+  display: block;
+  width: auto !important;
+}
+
+html.tsm-location .tsm-unit {
+  display: block;
+  margin: 0 0 8px;
+  background: #fff;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+html.tsm-location .tsm-unit.tsm-has-open {
+  border-color: #b7dca0;
+}
+
+html.tsm-location .tsm-unit.tsm-mine {
+  border-color: #003060;
+  box-shadow: inset 3px 0 0 #003060;
+}
+
+html.tsm-location .tsm-unit > td {
+  display: block;
+  padding: 0 !important;
+}
+
+html.tsm-location div.location {
+  padding: 9px 12px 4px;
+  background: none !important;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  text-decoration: none;
+}
+
+html.tsm-location .row1,
+html.tsm-location .row2,
+html.tsm-location .month_calendar_current_day {
+  background: none !important;
+}
+
+html.tsm-location table.shifts {
+  display: block;
+  width: auto !important;
+}
+
+html.tsm-location table.shifts > tbody {
+  display: block;
+}
+
+html.tsm-location table.shifts > tbody > tr {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  padding: 7px 12px !important;
+  border-top: 1px solid #f1f3f5;
+  background: none !important;
+}
+
+html.tsm-location table.shifts td {
+  display: block;
+  min-width: 0;
+  padding: 0 !important;
+  white-space: normal !important;
+}
+
+html.tsm-location table.shifts td.timerange {
+  flex: 0 0 auto;
+  white-space: nowrap !important;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+html.tsm-location tr.employee > td:first-child {
+  color: #1f2937;
+}
+
+html.tsm-location tr.tsm-mine-slot > td:first-child {
+  color: #003060;
+  font-weight: 800;
+}
+
+html.tsm-location tr.tsm-mine-slot > td:first-child::after {
+  content: "you";
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #003060;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+/* an open slot you can request: the span keeps its own onclick */
+html.tsm-location tr.unassigned {
+  background: #f1faea !important;
+}
+
+html.tsm-location tr.unassigned span.hightlight {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  background: #6eb53f;
+  color: #fff !important;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+html.tsm-location tr.unassigned span.hightlight::after {
+  content: "Request ›";
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+/* an open slot you cannot request (conflict, past, outside the window) */
+html.tsm-location tr.unassigned-unavailable {
+  color: #9ca3af !important;
+}
+
+html.tsm-location tr.unassigned-unavailable span.hightlight {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #eef0f3;
+  color: #6b7280 !important;
+  font-size: 13px;
+}
+
+html.tsm-location tr.unassigned-unavailable span.hightlight::after {
+  content: " · unavailable";
+  font-weight: 400;
+}
+
+html.tsm-filter-open .tsm-unit:not(.tsm-has-open) {
+  display: none !important;
+}
+
+html.tsm-filter-mine .tsm-unit:not(.tsm-mine) {
+  display: none !important;
+}
+
+/* ---------- the site's jQuery UI dialogs (pickup confirmation) ---------- */
+
+html.tsm .ui-dialog {
+  position: fixed !important;
+  top: 60px !important;
+  left: 8px !important;
+  right: 8px !important;
+  width: auto !important;
+  height: auto !important;
+  max-height: calc(100vh - 76px);
+  box-sizing: border-box;
+  overflow-y: auto;
+  border-radius: 12px;
+  font-family: system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html.tsm .ui-dialog .ui-dialog-content {
+  width: auto !important;
+  height: auto !important;
+  max-height: none !important;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+html.tsm .ui-dialog .ui-resizable-handle {
+  display: none !important;
+}
+
+html.tsm .ui-dialog textarea,
+html.tsm .ui-dialog select,
+html.tsm .ui-dialog input[type="text"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  font-size: 16px;
+  padding: 8px;
+  border: 1px solid #cfd4db;
+  border-radius: 8px;
+}
+
+html.tsm #confirm_dialog_form > br {
+  display: none;
+}
+
+html.tsm #show_confirm_details {
+  display: block;
+  margin-bottom: 12px;
+}
+
+html.tsm #confirm_dialog_form > b {
+  display: block;
+  margin: 10px 0 4px;
+}
+
+html.tsm #confirm_dialog_form a.commands {
+  display: block;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #003060;
+  color: #fff !important;
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+html.tsm .ui-widget-overlay {
+  position: fixed !important;
+  inset: 0;
+  width: auto !important;
+  height: auto !important;
+}
