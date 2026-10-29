@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "en-US": "Makes the Traumasoft employee schedule readable on a phone: a day-by-day agenda of your shifts, and a one-day-at-a-time view of the Vehicle/Location calendars with open-shift badges, filters and a person search."
+  },
+  "description": {
+    "en-US": "The Traumasoft schedule page is a desktop month grid that runs off the edge of a phone screen. This add-on restyles it, on phones only, without changing how the site works.\n\nIndividual Month View becomes a vertical agenda: one row per day, your shifts as cards with unit, time and details, today marked, past days muted, and a Today button.\n\nVehicle/Location Month Views (for example BLS) show one day at a time under a sticky pager: a strip of day chips with the number of requestable open shifts on each day, previous/next buttons, All / Open only / Mine filters, and a Find-a-person box that shows only the units that person is on, highlights their name, and marks which days of the month they work.\n\nOpen shifts you can request are the site's own buttons, just restyled, so tapping one opens the normal confirmation dialog, which is also sized to the phone.\n\nNo data is collected or sent anywhere. The add-on only runs on traumasoft.com schedule pages and does nothing on desktop-sized screens. It is an independent project and is not affiliated with Traumasoft."
+  },
+  "categories": [
+    "other"
+  ],
+  "version": {
+    "license": "MIT",
+    "release_notes": {
+      "en-US": "First public release."
+    }
+  }
+}

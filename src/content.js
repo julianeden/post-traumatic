@@ -11,18 +11,14 @@
 "use strict";
 
 (() => {
-  const VERSION = "0.1.1";
-  // Shows a status panel on every page of the site for a few seconds.
-  const DIAG = true;
   const MOBILE_QUERY = "(max-width: 820px)";
   const CALENDAR_WAIT_MS = 30000;
   const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const html = document.documentElement;
 
-  const diag = createDiag();
-  diag.log(`Traumasoft Mobile v${VERSION} · script running`);
-  diag.log(`url: ${location.host}${location.pathname}${location.search.slice(0, 70)}`);
-  diag.log(`readyState: ${document.readyState}`);
+  // Progress notes go to the console (filter on "Traumasoft Mobile").
+  const diag = { log: (line) => console.debug("[Traumasoft Mobile]", line) };
+  diag.log(`script running on ${location.host}${location.pathname}${location.search.slice(0, 70)} (${document.readyState})`);
 
   try {
     main();
@@ -116,46 +112,6 @@
       addTodayButton(month);
     }
     diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
-  }
-
-  // ---- diagnostics -------------------------------------------------------
-
-  function createDiag() {
-    const lines = [];
-    let panel = null;
-    let hideTimer = 0;
-
-    function render() {
-      if (!DIAG) return;
-      if (!panel) {
-        if (!document.body) return;
-        panel = document.createElement("div");
-        panel.id = "tsm-diag";
-        panel.setAttribute(
-          "style",
-          "position:fixed!important;left:8px!important;right:8px!important;bottom:8px!important;z-index:2147483647!important;" +
-            "padding:8px 10px!important;border-radius:8px!important;background:rgba(17,24,39,.92)!important;color:#fff!important;" +
-            "font:12px/1.4 ui-monospace,Menlo,monospace!important;white-space:pre-wrap!important;word-break:break-word!important;" +
-            "box-shadow:0 4px 14px rgba(0,0,0,.3)!important;pointer-events:auto!important;max-height:45vh!important;overflow:auto!important;",
-        );
-        panel.addEventListener("click", () => panel.remove());
-        document.body.append(panel);
-      }
-      panel.textContent = lines.join("\n") + "\n(tap to dismiss)";
-      clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => panel && panel.remove(), 15000);
-    }
-
-    if (DIAG && !document.body) {
-      document.addEventListener("DOMContentLoaded", render, { once: true });
-    }
-
-    return {
-      log(line) {
-        lines.push(line);
-        render();
-      },
-    };
   }
 
   // ---- page chrome -------------------------------------------------------

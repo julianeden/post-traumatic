@@ -43,11 +43,10 @@ is 820px wide or narrower.
 
 ## Diagnostics
 
-While `DIAG` is `true` at the top of `content.js`, every page on the site
-shows a small dark panel at the bottom for about 15 seconds (tap to dismiss)
-with the add-on version, the URL it saw, the viewport size, whether the
-calendar was found, the chosen mode, and any error. Set it to `false` once the
-add-on is confirmed working on the phone.
+The script logs what it decided (URL seen, viewport check, whether the
+calendar was found, chosen mode, errors) with `console.debug` under the
+prefix "Traumasoft Mobile". On a phone, read them with remote debugging from
+desktop Firefox (`about:debugging`, USB).
 
 ## Layout
 
@@ -88,17 +87,32 @@ view shows exactly one day with a chip per day, that the "Open only" and
 person filters hide the right units, and that the confirmation dialog fits
 the viewport. Screenshots of every state land in `test/out/`.
 
-## Install on Firefox for Android
+## Distribution
 
-Firefox for Android only installs Mozilla-signed extensions. Sign it on
-addons.mozilla.org as an unlisted add-on, then install the `.xpi` from a file:
+### Public listing on addons.mozilla.org
 
-```sh
-WEB_EXT_API_KEY=... WEB_EXT_API_SECRET=... npm run sign
-```
+The add-on is published as a listed add-on so anyone can install it from its
+AMO page in Firefox for Android. Listing metadata (summary, description,
+category, license) lives in `amo-metadata.json`. To publish a new version:
 
-On the phone: Settings, About Firefox, tap the logo five times, then Settings,
-"Install extension from file", pick the `.xpi`.
+1. Bump `version` in `src/manifest.json` and `package.json`.
+2. Run, with your AMO API credentials from
+   https://addons.mozilla.org/developers/addon/api/key/:
+
+   ```sh
+   WEB_EXT_API_KEY=... WEB_EXT_API_SECRET=... npm run sign:listed
+   ```
+
+AMO validates the package automatically and usually publishes within minutes;
+a human review can follow. If the API refuses the first listed version of an
+add-on that already has unlisted versions, upload `dist/*.zip` on the website
+instead: Developer Hub, the add-on, Upload New Version, "On this site".
+
+### Self-distributed (unlisted)
+
+`npm run sign` signs it as unlisted and downloads the `.xpi` to `dist/`. On
+the phone: Settings, About Firefox, tap the logo five times, then Settings,
+"Install extension from file".
 
 ## Develop
 
