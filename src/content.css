@@ -40,8 +40,7 @@ html.tsm #user_content table {
   table-layout: auto;
 }
 
-html.tsm #user_content td[width],
-html.tsm #user_content table[width] {
+html.tsm #user_content td[width] {
   width: auto !important;
 }
 
