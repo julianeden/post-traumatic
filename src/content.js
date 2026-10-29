@@ -31,14 +31,6 @@
   }
 
   function main() {
-    const mq = matchMedia(MOBILE_QUERY).matches;
-    const touchNarrow = navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) <= 820;
-    diag.log(`viewport ${innerWidth}×${innerHeight} · media query ${mq ? "matches" : "no"} · touch+narrow ${touchNarrow ? "yes" : "no"}`);
-    if (!mq && !touchNarrow) {
-      diag.log("desktop-sized viewport: not activating");
-      return;
-    }
-
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", onReady, { once: true });
     } else {
@@ -50,7 +42,20 @@
     return Boolean(document.getElementById("view_select") && document.querySelector("table.month"));
   }
 
+  // Runs once the DOM is parsed: before that the page's viewport meta tag is
+  // not in effect and a phone still reports a desktop-sized layout width.
+  function isPhoneWidth() {
+    const mq = matchMedia(MOBILE_QUERY).matches;
+    const touchNarrow = navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) <= 820;
+    diag.log(`viewport ${innerWidth}×${innerHeight} · media query ${mq ? "matches" : "no"} · touch+narrow ${touchNarrow ? "yes" : "no"}`);
+    return mq || touchNarrow;
+  }
+
   function onReady() {
+    if (!isPhoneWidth()) {
+      diag.log("desktop-sized viewport: not activating");
+      return;
+    }
     diag.log(`DOM ready · #view_select ${document.getElementById("view_select") ? "yes" : "no"} · table.month ${document.querySelector("table.month") ? "yes" : "no"}`);
     if (isSchedulePageDom()) {
       safeInit();

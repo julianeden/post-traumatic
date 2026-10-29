@@ -41,6 +41,14 @@ in `localStorage`.
 Desktop browsers are untouched: the script only activates when the viewport
 is 820px wide or narrower.
 
+## Diagnostics
+
+While `DIAG` is `true` at the top of `content.js`, every page on the site
+shows a small dark panel at the bottom for about 15 seconds (tap to dismiss)
+with the add-on version, the URL it saw, the viewport size, whether the
+calendar was found, the chosen mode, and any error. Set it to `false` once the
+add-on is confirmed working on the phone.
+
 ## Layout
 
 ```
