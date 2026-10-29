@@ -1,6 +1,6 @@
 {
   "name": "traumasoft-mobile",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Firefox add-on that restyles the Traumasoft schedule calendar for phones.",
   "scripts": {
