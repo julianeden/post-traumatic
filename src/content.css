@@ -1,11 +1,11 @@
 /* Traumasoft Mobile Schedule.
-   Every rule is scoped to html.tsm, which content.js adds only on the
-   schedule calendar page at phone widths. html.tsm-agenda is the
-   "Individual Month View"; html.tsm-location is a "Vehicle/Location" view. */
+   Every rule is scoped to html[data-tsm="on"], which content.js adds only on the
+   schedule calendar page at phone widths. html[data-tsm-mode="agenda"] is the
+   "Individual Month View"; html[data-tsm-mode="location"] is a "Vehicle/Location" view. */
 
 /* ---------- page frame ---------- */
 
-html.tsm #main-wrapper {
+html[data-tsm="on"] #main-wrapper {
   width: auto !important;
   min-width: 0 !important;
   margin: 0 !important;
@@ -13,7 +13,7 @@ html.tsm #main-wrapper {
   border-radius: 0 !important;
 }
 
-html.tsm #main-content {
+html[data-tsm="on"] #main-content {
   width: auto !important;
   min-width: 0 !important;
   margin: 0 !important;
@@ -22,45 +22,45 @@ html.tsm #main-content {
   background: #f6f7f9;
 }
 
-html.tsm #user_content,
-html.tsm #user_content td,
-html.tsm #user_content div:not(.v-application * div) {
+html[data-tsm="on"] #user_content,
+html[data-tsm="on"] #user_content td,
+html[data-tsm="on"] #user_content div:not(.v-application * div) {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   color: #1f2937;
 }
 
-html.tsm #user_content {
+html[data-tsm="on"] #user_content {
   width: 100% !important;
 }
 
-html.tsm #user_content table {
+html[data-tsm="on"] #user_content table {
   width: 100% !important;
   max-width: 100%;
   table-layout: auto;
 }
 
-html.tsm #user_content td[width] {
+html[data-tsm="on"] #user_content td[width] {
   width: auto !important;
 }
 
-html.tsm #user_content br {
+html[data-tsm="on"] #user_content br {
   display: none;
 }
 
 /* The info row is three side-by-side cells (facts, spacer, filler);
    stack the first and drop the rest so the quick links get the full width. */
-html.tsm #user_content td[width="550"] {
+html[data-tsm="on"] #user_content td[width="550"] {
   display: block;
   width: auto !important;
 }
 
-html.tsm #user_content td[width="550"] ~ td {
+html[data-tsm="on"] #user_content td[width="550"] ~ td {
   display: none;
 }
 
 /* section headings */
-html.tsm td.std_header {
+html[data-tsm="on"] td.std_header {
   background: none !important;
   color: #6b7280 !important;
   font-size: 12px;
@@ -72,11 +72,11 @@ html.tsm td.std_header {
 }
 
 /* quick links become tappable rows */
-html.tsm #user_content td.indent:has(> a) {
+html[data-tsm="on"] #user_content td.indent:has(> a) {
   padding: 0 !important;
 }
 
-html.tsm #user_content td.indent > a {
+html[data-tsm="on"] #user_content td.indent > a {
   display: block;
   padding: 12px 14px;
   margin: 4px 0;
@@ -88,7 +88,7 @@ html.tsm #user_content td.indent > a {
   text-decoration: none;
 }
 
-html.tsm #user_content td.indent > a::after {
+html[data-tsm="on"] #user_content td.indent > a::after {
   content: "›";
   float: right;
   color: #9ca3af;
@@ -97,7 +97,7 @@ html.tsm #user_content td.indent > a::after {
 }
 
 /* the "General Schedule" facts */
-html.tsm td.data_field {
+html[data-tsm="on"] td.data_field {
   border: 0 !important;
   background: none !important;
   color: #003060 !important;
@@ -108,26 +108,26 @@ html.tsm td.data_field {
 
 /* ---------- toolbar: view, legend, month/year ---------- */
 
-html.tsm table:has(> tbody > tr.tsm-toolbar),
-html.tsm table:has(> tbody > tr.tsm-toolbar) > tbody {
+html[data-tsm="on"] table:has(> tbody > tr.tsm-toolbar),
+html[data-tsm="on"] table:has(> tbody > tr.tsm-toolbar) > tbody {
   display: block;
 }
 
-html.tsm tr.tsm-toolbar {
+html[data-tsm="on"] tr.tsm-toolbar {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin: 2px 0 6px;
 }
 
-html.tsm tr.tsm-toolbar > td {
+html[data-tsm="on"] tr.tsm-toolbar > td {
   display: block;
   width: auto !important;
   padding: 0 !important;
   text-align: left !important;
 }
 
-html.tsm .tsm-label {
+html[data-tsm="on"] .tsm-label {
   display: block;
   font-size: 12px;
   font-weight: 700;
@@ -137,7 +137,7 @@ html.tsm .tsm-label {
   margin-bottom: 4px;
 }
 
-html.tsm #view_select {
+html[data-tsm="on"] #view_select {
   width: 100%;
   font-size: 16px;
   padding: 10px 12px;
@@ -147,13 +147,13 @@ html.tsm #view_select {
   color: #111827;
 }
 
-html.tsm td.tsm-toolbar-nav {
+html[data-tsm="on"] td.tsm-toolbar-nav {
   display: flex !important;
   gap: 8px;
   align-items: stretch;
 }
 
-html.tsm td.tsm-toolbar-nav select {
+html[data-tsm="on"] td.tsm-toolbar-nav select {
   flex: 1 1 0;
   min-width: 0;
   font-size: 16px;
@@ -164,7 +164,7 @@ html.tsm td.tsm-toolbar-nav select {
   color: #111827;
 }
 
-html.tsm #submit_form {
+html[data-tsm="on"] #submit_form {
   flex: 0 0 auto;
   padding: 10px 18px;
   font-size: 15px;
@@ -175,7 +175,7 @@ html.tsm #submit_form {
   border-radius: 10px;
 }
 
-html.tsm .calendar-legend {
+html[data-tsm="on"] .calendar-legend {
   width: auto !important;
   flex-wrap: wrap;
   row-gap: 4px;
@@ -185,26 +185,26 @@ html.tsm .calendar-legend {
   color: #4b5563;
 }
 
-html.tsm .calendar-legend-color {
+html[data-tsm="on"] .calendar-legend-color {
   border-radius: 3px;
 }
 
 /* ---------- month table, shared ---------- */
 
-html.tsm table.month,
-html.tsm table.month > tbody,
-html.tsm table.month > tbody > tr {
+html[data-tsm="on"] table.month,
+html[data-tsm="on"] table.month > tbody,
+html[data-tsm="on"] table.month > tbody > tr {
   display: block;
   width: 100% !important;
   height: auto !important;
   border: 0 !important;
 }
 
-html.tsm table.month td {
+html[data-tsm="on"] table.month td {
   font-size: 14px;
 }
 
-html.tsm td.monthname {
+html[data-tsm="on"] td.monthname {
   display: block;
   border: 0 !important;
   font-size: 20px;
@@ -213,16 +213,16 @@ html.tsm td.monthname {
   padding: 10px 0 8px !important;
 }
 
-html.tsm td.dayname,
-html.tsm td.nomonthday {
+html[data-tsm="on"] td.dayname,
+html[data-tsm="on"] td.nomonthday {
   display: none !important;
 }
 
-html.tsm table.eventcontent {
+html[data-tsm="on"] table.eventcontent {
   margin: 0 !important;
 }
 
-html.tsm td[id^="day_"] {
+html[data-tsm="on"] td[id^="day_"] {
   display: block;
   width: auto !important;
   height: auto !important;
@@ -236,7 +236,7 @@ html.tsm td[id^="day_"] {
   box-shadow: inset 4px 0 0 var(--tsm-tint, transparent);
 }
 
-html.tsm .tsm-dayhead {
+html[data-tsm="on"] .tsm-dayhead {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -244,7 +244,7 @@ html.tsm .tsm-dayhead {
   padding-top: 2px;
 }
 
-html.tsm .tsm-weekday {
+html[data-tsm="on"] .tsm-weekday {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -252,7 +252,7 @@ html.tsm .tsm-weekday {
   color: #6b7280;
 }
 
-html.tsm .tsm-daynum {
+html[data-tsm="on"] .tsm-daynum {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -265,13 +265,13 @@ html.tsm .tsm-daynum {
   color: #111827;
 }
 
-html.tsm .tsm-daylong {
+html[data-tsm="on"] .tsm-daylong {
   display: none;
 }
 
 /* ---------- agenda view: your own shifts ---------- */
 
-html.tsm-agenda td[id^="day_"] {
+html[data-tsm-mode="agenda"] td[id^="day_"] {
   display: grid;
   grid-template-columns: 52px minmax(0, 1fr);
   column-gap: 10px;
@@ -280,49 +280,49 @@ html.tsm-agenda td[id^="day_"] {
   border-top: 1px solid #e5e7eb !important;
 }
 
-html.tsm-agenda .tsm-today .tsm-daynum {
+html[data-tsm-mode="agenda"] .tsm-today .tsm-daynum {
   background: #003060;
   color: #fff;
 }
 
-html.tsm-agenda .tsm-today .tsm-weekday {
+html[data-tsm-mode="agenda"] .tsm-today .tsm-weekday {
   color: #003060;
 }
 
-html.tsm-agenda .tsm-past .tsm-dayhead {
+html[data-tsm-mode="agenda"] .tsm-past .tsm-dayhead {
   opacity: 0.6;
 }
 
-html.tsm-agenda .tsm-past .tsm-shift {
+html[data-tsm-mode="agenda"] .tsm-past .tsm-shift {
   background: #f9fafb;
   color: #6b7280;
 }
 
-html.tsm-agenda .tsm-past .tsm-shift-main > td:first-child,
-html.tsm-agenda .tsm-past .tsm-shift-main > td.timerange {
+html[data-tsm-mode="agenda"] .tsm-past .tsm-shift-main > td:first-child,
+html[data-tsm-mode="agenda"] .tsm-past .tsm-shift-main > td.timerange {
   color: #6b7280;
 }
 
-html.tsm-agenda td.tsm-empty {
+html[data-tsm-mode="agenda"] td.tsm-empty {
   display: flex;
   align-items: center;
   min-height: 0;
   padding: 5px 0 5px 4px !important;
 }
 
-html.tsm-agenda td.tsm-empty .tsm-dayhead {
+html[data-tsm-mode="agenda"] td.tsm-empty .tsm-dayhead {
   flex-direction: row;
   align-items: baseline;
   gap: 6px;
   padding: 0;
 }
 
-html.tsm-agenda td.tsm-empty .tsm-weekday {
+html[data-tsm-mode="agenda"] td.tsm-empty .tsm-weekday {
   font-size: 10px;
   width: 30px;
 }
 
-html.tsm-agenda td.tsm-empty .tsm-daynum {
+html[data-tsm-mode="agenda"] td.tsm-empty .tsm-daynum {
   width: auto;
   height: auto;
   margin: 0;
@@ -331,26 +331,26 @@ html.tsm-agenda td.tsm-empty .tsm-daynum {
   color: #6b7280;
 }
 
-html.tsm-agenda td.tsm-empty.tsm-today .tsm-daynum {
+html[data-tsm-mode="agenda"] td.tsm-empty.tsm-today .tsm-daynum {
   color: #003060;
   font-weight: 800;
 }
 
-html.tsm-agenda td.tsm-empty table.eventcontent {
+html[data-tsm-mode="agenda"] td.tsm-empty table.eventcontent {
   display: none;
 }
 
-html.tsm-agenda table.eventcontent,
-html.tsm-agenda table.eventcontent > tbody,
-html.tsm-agenda table.eventcontent > tbody > tr,
-html.tsm-agenda table.eventcontent > tbody > tr > td {
+html[data-tsm-mode="agenda"] table.eventcontent,
+html[data-tsm-mode="agenda"] table.eventcontent > tbody,
+html[data-tsm-mode="agenda"] table.eventcontent > tbody > tr,
+html[data-tsm-mode="agenda"] table.eventcontent > tbody > tr > td {
   display: block;
   width: auto !important;
   min-width: 0;
   padding: 0 !important;
 }
 
-html.tsm-agenda .tsm-shift {
+html[data-tsm-mode="agenda"] .tsm-shift {
   display: block;
   width: auto !important;
   margin: 0 0 8px;
@@ -361,30 +361,30 @@ html.tsm-agenda .tsm-shift {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-html.tsm-agenda .tsm-shift > tbody {
+html[data-tsm-mode="agenda"] .tsm-shift > tbody {
   display: block;
 }
 
-html.tsm-agenda .tsm-shift-main {
+html[data-tsm-mode="agenda"] .tsm-shift-main {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 10px;
 }
 
-html.tsm-agenda .tsm-shift-main > td {
+html[data-tsm-mode="agenda"] .tsm-shift-main > td {
   display: block;
   padding: 0 !important;
   white-space: normal;
 }
 
-html.tsm-agenda .tsm-shift-main > td:first-child {
+html[data-tsm-mode="agenda"] .tsm-shift-main > td:first-child {
   font-size: 15px;
   font-weight: 700;
   color: #111827;
 }
 
-html.tsm-agenda .tsm-shift-main > td.timerange {
+html[data-tsm-mode="agenda"] .tsm-shift-main > td.timerange {
   flex: 0 0 auto;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -392,11 +392,11 @@ html.tsm-agenda .tsm-shift-main > td.timerange {
   color: #374151;
 }
 
-html.tsm-agenda .tsm-shift-details {
+html[data-tsm-mode="agenda"] .tsm-shift-details {
   display: block;
 }
 
-html.tsm-agenda .tsm-shift-details > td {
+html[data-tsm-mode="agenda"] .tsm-shift-details > td {
   display: block;
   padding: 4px 0 0 !important;
   font-size: 13px;
@@ -404,11 +404,11 @@ html.tsm-agenda .tsm-shift-details > td {
   color: #4b5563;
 }
 
-html.tsm-agenda .tsm-spacer {
+html[data-tsm-mode="agenda"] .tsm-spacer {
   display: none;
 }
 
-html.tsm .tsm-fab {
+html[data-tsm="on"] .tsm-fab {
   position: fixed;
   right: 14px;
   bottom: 18px;
@@ -424,15 +424,15 @@ html.tsm .tsm-fab {
 
 /* ---------- location view: every unit, one day at a time ---------- */
 
-html.tsm-location td.monthname {
+html[data-tsm-mode="location"] td.monthname {
   display: none;
 }
 
-html.tsm-location td[id^="day_"]:not(.tsm-selected) {
+html[data-tsm-mode="location"] td[id^="day_"]:not(.tsm-selected) {
   display: none !important;
 }
 
-html.tsm .tsm-pager {
+html[data-tsm="on"] .tsm-pager {
   position: sticky;
   top: 48px;
   z-index: 20;
@@ -445,20 +445,20 @@ html.tsm .tsm-pager {
   contain: inline-size;
 }
 
-html.tsm .tsm-pager-title {
+html[data-tsm="on"] .tsm-pager-title {
   margin: 0 0 6px;
   font-size: 20px;
   font-weight: 800;
   color: #111827;
 }
 
-html.tsm .tsm-nav {
+html[data-tsm="on"] .tsm-nav {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-html.tsm .tsm-navbtn {
+html[data-tsm="on"] .tsm-navbtn {
   flex: 0 0 34px;
   height: 56px;
   padding: 0;
@@ -470,11 +470,11 @@ html.tsm .tsm-navbtn {
   line-height: 1;
 }
 
-html.tsm .tsm-navbtn:disabled {
+html[data-tsm="on"] .tsm-navbtn:disabled {
   opacity: 0.35;
 }
 
-html.tsm .tsm-strip {
+html[data-tsm="on"] .tsm-strip {
   flex: 1 1 auto;
   display: flex;
   gap: 6px;
@@ -485,11 +485,11 @@ html.tsm .tsm-strip {
   scroll-snap-type: x proximity;
 }
 
-html.tsm .tsm-strip::-webkit-scrollbar {
+html[data-tsm="on"] .tsm-strip::-webkit-scrollbar {
   display: none;
 }
 
-html.tsm .tsm-chip {
+html[data-tsm="on"] .tsm-chip {
   position: relative;
   flex: 0 0 46px;
   height: 56px;
@@ -507,7 +507,7 @@ html.tsm .tsm-chip {
   scroll-snap-align: center;
 }
 
-html.tsm .tsm-chip-wd {
+html[data-tsm="on"] .tsm-chip-wd {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -515,13 +515,13 @@ html.tsm .tsm-chip-wd {
   color: #6b7280;
 }
 
-html.tsm .tsm-chip-num {
+html[data-tsm="on"] .tsm-chip-num {
   font-size: 16px;
   font-weight: 800;
   line-height: 1;
 }
 
-html.tsm .tsm-chip-open {
+html[data-tsm="on"] .tsm-chip-open {
   min-width: 14px;
   padding: 0 4px;
   border-radius: 7px;
@@ -532,7 +532,7 @@ html.tsm .tsm-chip-open {
   line-height: 14px;
 }
 
-html.tsm .tsm-chip-mine {
+html[data-tsm="on"] .tsm-chip-mine {
   position: absolute;
   top: 4px;
   right: 4px;
@@ -542,37 +542,37 @@ html.tsm .tsm-chip-mine {
   background: #003060;
 }
 
-html.tsm .tsm-chip-past {
+html[data-tsm="on"] .tsm-chip-past {
   opacity: 0.5;
 }
 
-html.tsm .tsm-chip-today {
+html[data-tsm="on"] .tsm-chip-today {
   border-color: #003060;
   box-shadow: inset 0 0 0 1px #003060;
 }
 
-html.tsm .tsm-chip-selected {
+html[data-tsm="on"] .tsm-chip-selected {
   background: #003060;
   border-color: #003060;
   color: #fff;
   opacity: 1;
 }
 
-html.tsm .tsm-chip-selected .tsm-chip-wd {
+html[data-tsm="on"] .tsm-chip-selected .tsm-chip-wd {
   color: #c7d2e3;
 }
 
-html.tsm .tsm-chip-selected .tsm-chip-mine {
+html[data-tsm="on"] .tsm-chip-selected .tsm-chip-mine {
   background: #fff;
 }
 
-html.tsm .tsm-filters {
+html[data-tsm="on"] .tsm-filters {
   display: flex;
   gap: 6px;
   margin-top: 8px;
 }
 
-html.tsm .tsm-filter {
+html[data-tsm="on"] .tsm-filter {
   flex: 1 1 0;
   padding: 8px 6px;
   border: 1px solid #cfd4db;
@@ -582,18 +582,18 @@ html.tsm .tsm-filter {
   font: 600 13px system-ui, -apple-system, Roboto, sans-serif;
 }
 
-html.tsm .tsm-filter-active {
+html[data-tsm="on"] .tsm-filter-active {
   background: #003060;
   border-color: #003060;
   color: #fff;
 }
 
-html.tsm .tsm-search {
+html[data-tsm="on"] .tsm-search {
   position: relative;
   margin-top: 8px;
 }
 
-html.tsm .tsm-search-input {
+html[data-tsm="on"] .tsm-search-input {
   width: 100%;
   box-sizing: border-box;
   padding: 10px 40px 10px 12px;
@@ -606,19 +606,19 @@ html.tsm .tsm-search-input {
   appearance: none;
 }
 
-html.tsm .tsm-search-input::-webkit-search-cancel-button,
-html.tsm .tsm-search-input::-webkit-search-decoration {
+html[data-tsm="on"] .tsm-search-input::-webkit-search-cancel-button,
+html[data-tsm="on"] .tsm-search-input::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
   display: none;
 }
 
-html.tsm .tsm-search-active .tsm-search-input {
+html[data-tsm="on"] .tsm-search-active .tsm-search-input {
   border-color: #d97706;
   box-shadow: inset 0 0 0 1px #d97706;
 }
 
-html.tsm .tsm-search-clear {
+html[data-tsm="on"] .tsm-search-clear {
   position: absolute;
   top: 50%;
   right: 6px;
@@ -635,11 +635,11 @@ html.tsm .tsm-search-clear {
   display: none;
 }
 
-html.tsm .tsm-search-active .tsm-search-clear {
+html[data-tsm="on"] .tsm-search-active .tsm-search-clear {
   display: block;
 }
 
-html.tsm .tsm-chip-name {
+html[data-tsm="on"] .tsm-chip-name {
   min-width: 14px;
   padding: 0 4px;
   border-radius: 7px;
@@ -650,19 +650,19 @@ html.tsm .tsm-chip-name {
   line-height: 14px;
 }
 
-html.tsm .tsm-chip-name[hidden] {
+html[data-tsm="on"] .tsm-chip-name[hidden] {
   display: none;
 }
 
-html.tsm-filter-name .tsm-chip:not(.tsm-chip-has-match):not(.tsm-chip-selected) {
+html[data-tsm-name="on"] .tsm-chip:not(.tsm-chip-has-match):not(.tsm-chip-selected) {
   opacity: 0.3;
 }
 
-html.tsm-filter-name .tsm-unit:not(.tsm-match) {
+html[data-tsm-name="on"] .tsm-unit:not(.tsm-match) {
   display: none !important;
 }
 
-html.tsm-location tr.tsm-match-slot > td:first-child {
+html[data-tsm-mode="location"] tr.tsm-match-slot > td:first-child {
   font-weight: 800;
   color: #92400e;
   background: #fef3c7;
@@ -671,42 +671,42 @@ html.tsm-location tr.tsm-match-slot > td:first-child {
   margin-left: -6px;
 }
 
-html.tsm .tsm-status {
+html[data-tsm="on"] .tsm-status {
   margin-top: 6px;
   font-size: 12px;
   color: #6b7280;
 }
 
-html.tsm-location td.tsm-selected {
+html[data-tsm-mode="location"] td.tsm-selected {
   display: block;
   padding-top: 6px !important;
 }
 
-html.tsm-location .tsm-dayhead {
+html[data-tsm-mode="location"] .tsm-dayhead {
   display: block;
   margin: 6px 0 8px;
   padding: 0;
 }
 
-html.tsm-location .tsm-weekday,
-html.tsm-location .tsm-daynum {
+html[data-tsm-mode="location"] .tsm-weekday,
+html[data-tsm-mode="location"] .tsm-daynum {
   display: none;
 }
 
-html.tsm-location .tsm-daylong {
+html[data-tsm-mode="location"] .tsm-daylong {
   display: block;
   font-size: 17px;
   font-weight: 800;
   color: #111827;
 }
 
-html.tsm-location table.eventcontent,
-html.tsm-location table.eventcontent > tbody {
+html[data-tsm-mode="location"] table.eventcontent,
+html[data-tsm-mode="location"] table.eventcontent > tbody {
   display: block;
   width: auto !important;
 }
 
-html.tsm-location .tsm-unit {
+html[data-tsm-mode="location"] .tsm-unit {
   display: block;
   margin: 0 0 8px;
   background: #fff;
@@ -715,21 +715,21 @@ html.tsm-location .tsm-unit {
   overflow: hidden;
 }
 
-html.tsm-location .tsm-unit.tsm-has-open {
+html[data-tsm-mode="location"] .tsm-unit.tsm-has-open {
   border-color: #b7dca0;
 }
 
-html.tsm-location .tsm-unit.tsm-mine {
+html[data-tsm-mode="location"] .tsm-unit.tsm-mine {
   border-color: #003060;
   box-shadow: inset 3px 0 0 #003060;
 }
 
-html.tsm-location .tsm-unit > td {
+html[data-tsm-mode="location"] .tsm-unit > td {
   display: block;
   padding: 0 !important;
 }
 
-html.tsm-location div.location {
+html[data-tsm-mode="location"] div.location {
   padding: 9px 12px 4px;
   background: none !important;
   font-size: 15px;
@@ -738,22 +738,22 @@ html.tsm-location div.location {
   text-decoration: none;
 }
 
-html.tsm-location .row1,
-html.tsm-location .row2,
-html.tsm-location .month_calendar_current_day {
+html[data-tsm-mode="location"] .row1,
+html[data-tsm-mode="location"] .row2,
+html[data-tsm-mode="location"] .month_calendar_current_day {
   background: none !important;
 }
 
-html.tsm-location table.shifts {
+html[data-tsm-mode="location"] table.shifts {
   display: block;
   width: auto !important;
 }
 
-html.tsm-location table.shifts > tbody {
+html[data-tsm-mode="location"] table.shifts > tbody {
   display: block;
 }
 
-html.tsm-location table.shifts > tbody > tr {
+html[data-tsm-mode="location"] table.shifts > tbody > tr {
   display: flex !important;
   align-items: center;
   justify-content: space-between;
@@ -764,14 +764,14 @@ html.tsm-location table.shifts > tbody > tr {
   background: none !important;
 }
 
-html.tsm-location table.shifts td {
+html[data-tsm-mode="location"] table.shifts td {
   display: block;
   min-width: 0;
   padding: 0 !important;
   white-space: normal !important;
 }
 
-html.tsm-location table.shifts td.timerange {
+html[data-tsm-mode="location"] table.shifts td.timerange {
   flex: 0 0 auto;
   white-space: nowrap !important;
   font-variant-numeric: tabular-nums;
@@ -780,16 +780,16 @@ html.tsm-location table.shifts td.timerange {
   color: #374151;
 }
 
-html.tsm-location tr.employee > td:first-child {
+html[data-tsm-mode="location"] tr.employee > td:first-child {
   color: #1f2937;
 }
 
-html.tsm-location tr.tsm-mine-slot > td:first-child {
+html[data-tsm-mode="location"] tr.tsm-mine-slot > td:first-child {
   color: #003060;
   font-weight: 800;
 }
 
-html.tsm-location tr.tsm-mine-slot > td:first-child::after {
+html[data-tsm-mode="location"] tr.tsm-mine-slot > td:first-child::after {
   content: "you";
   margin-left: 6px;
   padding: 1px 6px;
@@ -804,11 +804,11 @@ html.tsm-location tr.tsm-mine-slot > td:first-child::after {
 }
 
 /* an open slot you can request: the span keeps its own onclick */
-html.tsm-location tr.unassigned {
+html[data-tsm-mode="location"] tr.unassigned {
   background: #f1faea !important;
 }
 
-html.tsm-location tr.unassigned span.hightlight {
+html[data-tsm-mode="location"] tr.unassigned span.hightlight {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -822,7 +822,7 @@ html.tsm-location tr.unassigned span.hightlight {
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
 }
 
-html.tsm-location tr.unassigned span.hightlight::after {
+html[data-tsm-mode="location"] tr.unassigned span.hightlight::after {
   content: "Request ›";
   font-size: 12px;
   font-weight: 600;
@@ -830,11 +830,11 @@ html.tsm-location tr.unassigned span.hightlight::after {
 }
 
 /* an open slot you cannot request (conflict, past, outside the window) */
-html.tsm-location tr.unassigned-unavailable {
+html[data-tsm-mode="location"] tr.unassigned-unavailable {
   color: #9ca3af !important;
 }
 
-html.tsm-location tr.unassigned-unavailable span.hightlight {
+html[data-tsm-mode="location"] tr.unassigned-unavailable span.hightlight {
   padding: 4px 8px;
   border-radius: 6px;
   background: #eef0f3;
@@ -842,22 +842,22 @@ html.tsm-location tr.unassigned-unavailable span.hightlight {
   font-size: 13px;
 }
 
-html.tsm-location tr.unassigned-unavailable span.hightlight::after {
+html[data-tsm-mode="location"] tr.unassigned-unavailable span.hightlight::after {
   content: " · unavailable";
   font-weight: 400;
 }
 
-html.tsm-filter-open .tsm-unit:not(.tsm-has-open) {
+html[data-tsm-filter="open"] .tsm-unit:not(.tsm-has-open) {
   display: none !important;
 }
 
-html.tsm-filter-mine .tsm-unit:not(.tsm-mine) {
+html[data-tsm-filter="mine"] .tsm-unit:not(.tsm-mine) {
   display: none !important;
 }
 
 /* ---------- the site's jQuery UI dialogs (pickup confirmation) ---------- */
 
-html.tsm .ui-dialog {
+html[data-tsm="on"] .ui-dialog {
   position: fixed !important;
   top: 60px !important;
   left: 8px !important;
@@ -871,7 +871,7 @@ html.tsm .ui-dialog {
   font-family: system-ui, -apple-system, Roboto, sans-serif;
 }
 
-html.tsm .ui-dialog .ui-dialog-content {
+html[data-tsm="on"] .ui-dialog .ui-dialog-content {
   width: auto !important;
   height: auto !important;
   max-height: none !important;
@@ -879,13 +879,13 @@ html.tsm .ui-dialog .ui-dialog-content {
   line-height: 1.4;
 }
 
-html.tsm .ui-dialog .ui-resizable-handle {
+html[data-tsm="on"] .ui-dialog .ui-resizable-handle {
   display: none !important;
 }
 
-html.tsm .ui-dialog textarea,
-html.tsm .ui-dialog select,
-html.tsm .ui-dialog input[type="text"] {
+html[data-tsm="on"] .ui-dialog textarea,
+html[data-tsm="on"] .ui-dialog select,
+html[data-tsm="on"] .ui-dialog input[type="text"] {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -895,21 +895,21 @@ html.tsm .ui-dialog input[type="text"] {
   border-radius: 8px;
 }
 
-html.tsm #confirm_dialog_form > br {
+html[data-tsm="on"] #confirm_dialog_form > br {
   display: none;
 }
 
-html.tsm #show_confirm_details {
+html[data-tsm="on"] #show_confirm_details {
   display: block;
   margin-bottom: 12px;
 }
 
-html.tsm #confirm_dialog_form > b {
+html[data-tsm="on"] #confirm_dialog_form > b {
   display: block;
   margin: 10px 0 4px;
 }
 
-html.tsm #confirm_dialog_form a.commands {
+html[data-tsm="on"] #confirm_dialog_form a.commands {
   display: block;
   margin-top: 14px;
   padding: 12px;
@@ -921,7 +921,7 @@ html.tsm #confirm_dialog_form a.commands {
   text-decoration: none;
 }
 
-html.tsm .ui-widget-overlay {
+html[data-tsm="on"] .ui-widget-overlay {
   position: fixed !important;
   inset: 0;
   width: auto !important;

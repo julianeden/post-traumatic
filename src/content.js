@@ -5,44 +5,90 @@
 // is so the site's own scripts and dialogs keep working. This script only adds
 // classes, wraps bare text nodes so CSS can style them, and inserts a day
 // pager for the location (all-units) views.
+//
+// State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
+// data-tsm-filter, data-tsm-name); the stylesheet keys off those.
 "use strict";
 
 (() => {
+  const VERSION = "0.1.1";
+  // Shows a status panel on every page of the site for a few seconds.
+  const DIAG = true;
   const MOBILE_QUERY = "(max-width: 820px)";
+  const CALENDAR_WAIT_MS = 30000;
   const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const html = document.documentElement;
 
-  function isSchedulePageUrl() {
-    if (!location.pathname.endsWith("/main.php")) return false;
-    const params = new URLSearchParams(location.search);
-    if (params.get("a") !== "user:schedule") return false;
-    const view = params.get("view");
-    return view === null || view === "schedule";
+  const diag = createDiag();
+  diag.log(`Traumasoft Mobile v${VERSION} · script running`);
+  diag.log(`url: ${location.host}${location.pathname}${location.search.slice(0, 70)}`);
+  diag.log(`readyState: ${document.readyState}`);
+
+  try {
+    main();
+  } catch (e) {
+    diag.log(`error: ${e && e.message ? e.message : e}`);
+  }
+
+  function main() {
+    const mq = matchMedia(MOBILE_QUERY).matches;
+    const touchNarrow = navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) <= 820;
+    diag.log(`viewport ${innerWidth}×${innerHeight} · media query ${mq ? "matches" : "no"} · touch+narrow ${touchNarrow ? "yes" : "no"}`);
+    if (!mq && !touchNarrow) {
+      diag.log("desktop-sized viewport: not activating");
+      return;
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", onReady, { once: true });
+    } else {
+      onReady();
+    }
   }
 
   function isSchedulePageDom() {
     return Boolean(document.getElementById("view_select") && document.querySelector("table.month"));
   }
 
-  if (!matchMedia(MOBILE_QUERY).matches) return;
+  function onReady() {
+    diag.log(`DOM ready · #view_select ${document.getElementById("view_select") ? "yes" : "no"} · table.month ${document.querySelector("table.month") ? "yes" : "no"}`);
+    if (isSchedulePageDom()) {
+      safeInit();
+      return;
+    }
+    // Some pages fill their content after load; keep looking for a while.
+    const started = Date.now();
+    const observer = new MutationObserver(() => {
+      if (isSchedulePageDom()) {
+        observer.disconnect();
+        diag.log(`calendar appeared after ${Date.now() - started} ms`);
+        safeInit();
+      } else if (Date.now() - started > CALENDAR_WAIT_MS) {
+        observer.disconnect();
+        diag.log("no schedule calendar on this page");
+      }
+    });
+    observer.observe(html, { childList: true, subtree: true });
+    setTimeout(() => {
+      if (!html.dataset.tsmReady) {
+        observer.disconnect();
+        diag.log("no schedule calendar on this page");
+      }
+    }, CALENDAR_WAIT_MS);
+  }
 
-  // Mark early so the stylesheet applies before first paint; confirmed or
-  // withdrawn once the DOM is available.
-  if (isSchedulePageUrl()) html.classList.add("tsm");
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init, { once: true });
-  } else {
-    init();
+  function safeInit() {
+    try {
+      init();
+    } catch (e) {
+      diag.log(`error in init: ${e && e.message ? e.message : e}`);
+    }
   }
 
   function init() {
-    if (html.classList.contains("tsm-ready")) return;
-    if (!isSchedulePageDom()) {
-      html.classList.remove("tsm");
-      return;
-    }
-    html.classList.add("tsm", "tsm-ready");
+    if (html.dataset.tsmReady) return;
+    html.dataset.tsm = "on";
+    html.dataset.tsmReady = "1";
 
     const month = document.querySelector("table.month");
     const days = [...month.querySelectorAll('td[id^="day_"]')];
@@ -52,15 +98,59 @@
     decorateDays(month, days, isLocation);
 
     if (isLocation) {
-      html.classList.add("tsm-location");
+      html.dataset.tsmMode = "location";
       const pager = buildPager(month, days);
       // The header that carries the signed-in name is rendered by the site's
       // own script and may land after DOMContentLoaded.
-      whenUserNameKnown(pager.setUser);
+      whenUserNameKnown((name) => {
+        diag.log(`signed-in name: ${name}`);
+        pager.setUser(name);
+      });
     } else {
-      html.classList.add("tsm-agenda");
+      html.dataset.tsmMode = "agenda";
       addTodayButton(month);
     }
+    diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
+  }
+
+  // ---- diagnostics -------------------------------------------------------
+
+  function createDiag() {
+    const lines = [];
+    let panel = null;
+    let hideTimer = 0;
+
+    function render() {
+      if (!DIAG) return;
+      if (!panel) {
+        if (!document.body) return;
+        panel = document.createElement("div");
+        panel.id = "tsm-diag";
+        panel.setAttribute(
+          "style",
+          "position:fixed!important;left:8px!important;right:8px!important;bottom:8px!important;z-index:2147483647!important;" +
+            "padding:8px 10px!important;border-radius:8px!important;background:rgba(17,24,39,.92)!important;color:#fff!important;" +
+            "font:12px/1.4 ui-monospace,Menlo,monospace!important;white-space:pre-wrap!important;word-break:break-word!important;" +
+            "box-shadow:0 4px 14px rgba(0,0,0,.3)!important;pointer-events:auto!important;max-height:45vh!important;overflow:auto!important;",
+        );
+        panel.addEventListener("click", () => panel.remove());
+        document.body.append(panel);
+      }
+      panel.textContent = lines.join("\n") + "\n(tap to dismiss)";
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => panel && panel.remove(), 15000);
+    }
+
+    if (DIAG && !document.body) {
+      document.addEventListener("DOMContentLoaded", render, { once: true });
+    }
+
+    return {
+      log(line) {
+        lines.push(line);
+        render();
+      },
+    };
   }
 
   // ---- page chrome -------------------------------------------------------
@@ -108,6 +198,7 @@
         return;
       }
       if (++tries < 20) setTimeout(attempt, 500);
+      else diag.log("signed-in name not found in header");
     };
     attempt();
   }
@@ -254,7 +345,7 @@
     nav.append(prev, strip, next);
 
     const filters = el("div", "tsm-filters");
-    filters.append(filterButton("All units", ""), filterButton("Open only", "tsm-filter-open"));
+    filters.append(filterButton("All units", ""), filterButton("Open only", "open"));
 
     const search = el("div", "tsm-search");
     const input = document.createElement("input");
@@ -323,14 +414,14 @@
       updateStatus();
     }
 
-    function setFilter(cls) {
-      html.classList.remove("tsm-filter-open", "tsm-filter-mine");
-      if (cls) html.classList.add(cls);
+    function setFilter(name) {
+      if (name) html.dataset.tsmFilter = name;
+      else delete html.dataset.tsmFilter;
       for (const b of filters.querySelectorAll(".tsm-filter")) {
-        b.classList.toggle("tsm-filter-active", b.dataset.filter === cls);
+        b.classList.toggle("tsm-filter-active", b.dataset.filter === name);
       }
       try {
-        localStorage.setItem("tsm.filter", cls);
+        localStorage.setItem("tsm.filter", name);
       } catch {
         // storage may be unavailable; the filter still applies for this page
       }
@@ -339,7 +430,8 @@
 
     function savedFilter() {
       try {
-        return localStorage.getItem("tsm.filter") || "";
+        const v = localStorage.getItem("tsm.filter") || "";
+        return v === "open" || v === "mine" ? v : "";
       } catch {
         return "";
       }
@@ -350,7 +442,8 @@
     function applyNameFilter(text) {
       query = text.trim();
       const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-      html.classList.toggle("tsm-filter-name", words.length > 0);
+      if (words.length > 0) html.dataset.tsmName = "on";
+      else delete html.dataset.tsmName;
       search.classList.toggle("tsm-search-active", words.length > 0);
 
       let total = 0;
@@ -391,6 +484,7 @@
       const units = td.querySelectorAll(".tsm-unit");
       const visible = [...units].filter((u) => u.offsetParent !== null).length;
       const open = Number(td.dataset.open || 0);
+      const filter = html.dataset.tsmFilter || "";
       const parts = [];
       if (query) {
         const total = matchesByDay.reduce((a, b) => a + b, 0);
@@ -401,8 +495,8 @@
       }
       if (units.length === 0) parts.push("Nothing scheduled.");
       else if (visible === 0 && query && matchesByDay[current] === 0) parts.push("Not on this day.");
-      else if (visible === 0 && html.classList.contains("tsm-filter-open")) parts.push("No open shifts you can request on this day.");
-      else if (visible === 0 && html.classList.contains("tsm-filter-mine")) parts.push("No shifts of yours on this day.");
+      else if (visible === 0 && filter === "open") parts.push("No open shifts you can request on this day.");
+      else if (visible === 0 && filter === "mine") parts.push("No shifts of yours on this day.");
       else if (query) parts.push(`On ${visible} unit${visible === 1 ? "" : "s"} this day.`);
       else parts.push(`${visible} of ${units.length} units · ${open} open shift${open === 1 ? "" : "s"}`);
       status.textContent = parts.join(" ");
@@ -417,10 +511,10 @@
       mineByDay.forEach((n, i) => {
         if (n) chips[i].append(el("span", "tsm-chip-mine"));
       });
-      const mineBtn = filterButton("Mine", "tsm-filter-mine");
-      mineBtn.addEventListener("click", () => setFilter("tsm-filter-mine"));
+      const mineBtn = filterButton("Mine", "mine");
+      mineBtn.addEventListener("click", () => setFilter("mine"));
       filters.append(mineBtn);
-      if (savedFilter() === "tsm-filter-mine") setFilter("tsm-filter-mine");
+      if (savedFilter() === "mine") setFilter("mine");
     }
 
     prev.addEventListener("click", () => select(current - 1));
@@ -446,7 +540,7 @@
     });
 
     const saved = savedFilter();
-    setFilter(saved === "tsm-filter-mine" ? "" : saved);
+    setFilter(saved === "mine" ? "" : saved);
 
     const todayIndex = days.findIndex((td) => td.classList.contains("tsm-today"));
     select(todayIndex >= 0 ? todayIndex : 0, { scroll: false });
@@ -470,11 +564,11 @@
     return b;
   }
 
-  function filterButton(text, cls) {
+  function filterButton(text, name) {
     const b = document.createElement("button");
     b.type = "button";
     b.className = "tsm-filter";
-    b.dataset.filter = cls;
+    b.dataset.filter = name;
     b.textContent = text;
     return b;
   }

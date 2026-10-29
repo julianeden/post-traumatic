@@ -71,8 +71,8 @@ for (const file of pages) {
       return r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(el).position !== "fixed";
     });
     return {
-      active: html.classList.contains("tsm-ready"),
-      mode: html.classList.contains("tsm-location") ? "location" : html.classList.contains("tsm-agenda") ? "agenda" : "none",
+      active: html.dataset.tsmReady === "1",
+      mode: html.dataset.tsmMode || "none",
       scrollWidth: html.scrollWidth,
       handlers: document.querySelectorAll("span.hightlight[onclick]").length,
       overflowing: wide.slice(0, 5).map((el) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : ""} right=${Math.round(el.getBoundingClientRect().right)}`),
@@ -157,7 +157,7 @@ for (const file of pages) {
       await page.locator(".tsm-search-clear").click();
       await page.waitForTimeout(300);
       const cleared = await page.evaluate(() => ({
-        active: document.documentElement.classList.contains("tsm-filter-name"),
+        active: Boolean(document.documentElement.dataset.tsmName),
         badges: document.querySelectorAll(".tsm-chip-has-match").length,
       }));
       if (cleared.active || cleared.badges) fail("clearing the person filter did not reset it");
