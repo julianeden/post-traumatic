@@ -203,6 +203,15 @@ html[data-tsm="on"] .calendar-legend-color {
 
 /* ---------- month table, shared ---------- */
 
+/* The row holding the calendar sits in a tbody that is already a block, so
+   as a table-row it would get an anonymous table sized to its content. */
+html[data-tsm="on"] tr:has(> td > table.month),
+html[data-tsm="on"] tr:has(> td > table.month) > td {
+  display: block;
+  width: auto !important;
+  padding: 0 !important;
+}
+
 html[data-tsm="on"] table.month,
 html[data-tsm="on"] table.month > tbody,
 html[data-tsm="on"] table.month > tbody > tr {
@@ -601,8 +610,31 @@ html[data-tsm="on"] .tsm-filter-active {
 }
 
 html[data-tsm="on"] .tsm-search {
-  position: relative;
+  display: flex;
+  gap: 6px;
   margin-top: 8px;
+}
+
+html[data-tsm="on"] .tsm-search-field {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+html[data-tsm="on"] .tsm-calbtn {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  border: 1px solid #cfd4db;
+  border-radius: 10px;
+  background: #fff;
+  color: #003060;
+  font: 700 13px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm="on"] .tsm-calbtn-active {
+  background: #003060;
+  border-color: #003060;
+  color: #fff;
 }
 
 html[data-tsm="on"] .tsm-search-input {
@@ -687,6 +719,272 @@ html[data-tsm="on"] .tsm-status {
   margin-top: 6px;
   font-size: 12px;
   color: #6b7280;
+}
+
+/* ---------- location view, calendar mode: one person's month ---------- */
+
+html[data-tsm="on"] .tsm-cal {
+  display: none;
+  margin: 10px 0 0;
+  contain: inline-size;
+}
+
+html[data-tsm-cal="on"] .tsm-cal {
+  display: block;
+}
+
+html[data-tsm-cal="on"] .tsm-nav,
+html[data-tsm-cal="on"] .tsm-filters,
+html[data-tsm-cal="on"] .tsm-status {
+  display: none;
+}
+
+html[data-tsm-cal="on"] td[id^="day_"] {
+  display: none !important;
+}
+
+html[data-tsm="on"] .tsm-cal-caption {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+html[data-tsm="on"] .tsm-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+html[data-tsm="on"] .tsm-cal-wd {
+  padding: 2px 0 4px;
+  text-align: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html[data-tsm="on"] .tsm-cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 54px;
+  padding: 7px 0 0;
+  border: 1px solid #e3e6ea;
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+}
+
+html[data-tsm="on"] .tsm-cal-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+html[data-tsm="on"] .tsm-cal-today .tsm-cal-num {
+  background: #003060;
+  color: #fff;
+}
+
+html[data-tsm="on"] .tsm-cal-past {
+  opacity: 0.5;
+}
+
+html[data-tsm="on"] .tsm-cal-has {
+  border-color: #f1c67a;
+  background: #fff8ea;
+  opacity: 1;
+}
+
+html[data-tsm="on"] .tsm-cal-has.tsm-cal-past {
+  opacity: 0.75;
+}
+
+html[data-tsm="on"] .tsm-cal-active {
+  border-color: #d97706;
+  box-shadow: inset 0 0 0 1px #d97706;
+}
+
+html[data-tsm="on"] .tsm-cal-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+}
+
+html[data-tsm="on"] .tsm-cal-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d97706;
+}
+
+html[data-tsm="on"] .tsm-cal-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #d97706;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+}
+
+/* the shift details card, a full-width grid row under the tapped day's row */
+html[data-tsm="on"] .tsm-pop {
+  position: relative;
+  grid-column: 1 / -1;
+  margin: 4px 0 6px;
+  padding: 10px 14px 14px;
+  background: #fff;
+  border: 1px solid #e3e6ea;
+  border-radius: 12px;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.2));
+}
+
+html[data-tsm="on"] .tsm-pop[hidden] {
+  display: none;
+}
+
+html[data-tsm="on"] .tsm-pop::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: var(--tsm-caret, 50%);
+  margin-left: -8px;
+  border: 8px solid transparent;
+  border-top: 0;
+  border-bottom-color: #fff;
+}
+
+html[data-tsm="on"] .tsm-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+html[data-tsm="on"] .tsm-pop-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #111827;
+}
+
+html[data-tsm="on"] .tsm-pop-close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #eef0f3;
+  color: #374151;
+  font-size: 20px;
+  line-height: 1;
+}
+
+html[data-tsm="on"] .tsm-pop-shift {
+  padding: 8px 0;
+  border-top: 1px solid #f1f3f5;
+}
+
+html[data-tsm="on"] .tsm-pop-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+html[data-tsm="on"] .tsm-pop-unit {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+html[data-tsm="on"] .tsm-pop-time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+html[data-tsm="on"] .tsm-pop-with {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+html[data-tsm="on"] .tsm-pop-with-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html[data-tsm="on"] .tsm-pop-open .tsm-pop-with-label {
+  color: #3f7d1a;
+}
+
+html[data-tsm="on"] .tsm-pop-with-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+html[data-tsm="on"] .tsm-pop-open .tsm-pop-with-name {
+  color: #3f7d1a;
+}
+
+html[data-tsm="on"] .tsm-pop-with-time {
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+}
+
+html[data-tsm="on"] .tsm-pop-tag {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #6eb53f;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+html[data-tsm="on"] .tsm-pop-solo {
+  font-style: italic;
+}
+
+html[data-tsm="on"] .tsm-pop-empty {
+  padding: 6px 0;
+  color: #6b7280;
+}
+
+html[data-tsm="on"] .tsm-pop-go {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: #003060;
+  color: #fff;
+  font: 700 14px system-ui, -apple-system, Roboto, sans-serif;
 }
 
 html[data-tsm-mode="location"] td.tsm-selected {

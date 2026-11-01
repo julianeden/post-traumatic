@@ -202,6 +202,119 @@ for (const file of pages) {
       if (check.bad) fail(`person filter shows ${check.bad} units without that person`);
       console.log(`  person filter "${person}": ${check.visible} units visible, ${check.highlighted} highlighted, ${check.daysWithBadge} days flagged; status: ${check.status}`);
       await page.screenshot({ path: join(outDir, `${name}-after-person.png`) });
+
+      // Calendar mode: a month grid with a dot per shift of that person.
+      await page.locator(".tsm-calbtn").click();
+      await page.waitForTimeout(200);
+      const cal = await page.evaluate(() => {
+        const html = document.documentElement;
+        const cells = [...document.querySelectorAll(".tsm-cal-day")];
+        const count = (c) => (c.querySelector(".tsm-cal-count") ? Number(c.querySelector(".tsm-cal-count").textContent) : c.querySelectorAll(".tsm-cal-dot").length);
+        const chipCounts = [...document.querySelectorAll(".tsm-chip")].map((chip) => {
+          const b = chip.querySelector(".tsm-chip-name");
+          return b.hidden ? 0 : Number(b.textContent);
+        });
+        const wide = [...document.querySelectorAll("body *")].filter((el) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(el).position !== "fixed";
+        });
+        return {
+          on: html.dataset.tsmCal === "on",
+          gridVisible: Boolean(document.querySelector(".tsm-cal-grid")?.offsetParent),
+          cells: cells.length,
+          dotted: cells.filter((c) => c.classList.contains("tsm-cal-has")).length,
+          mismatches: cells.filter((c, i) => count(c) !== chipCounts[i]).length,
+          visibleDays: [...document.querySelectorAll('td[id^="day_"]')].filter((td) => td.offsetParent !== null).length,
+          stripVisible: Boolean(document.querySelector(".tsm-strip")?.offsetParent),
+          caption: document.querySelector(".tsm-cal-caption")?.textContent,
+          button: document.querySelector(".tsm-calbtn")?.textContent,
+          overflowing: wide.length,
+          scrollWidth: html.scrollWidth,
+        };
+      });
+      if (!cal.on || !cal.gridVisible) fail("calendar mode did not turn on");
+      if (cal.cells !== before.days) fail(`calendar has ${cal.cells} day cells, expected ${before.days}`);
+      if (cal.dotted !== check.daysWithBadge) fail(`calendar dots ${cal.dotted} days, chips flag ${check.daysWithBadge}`);
+      if (cal.mismatches) fail(`dot counts disagree with chip counts on ${cal.mismatches} days`);
+      if (cal.visibleDays !== 0 || cal.stripVisible) fail("calendar mode still shows the day list or strip");
+      if (cal.button !== "List") fail(`toggle reads "${cal.button}" in calendar mode`);
+      if (cal.overflowing || cal.scrollWidth > VIEWPORT.width) fail(`calendar mode overflows: ${cal.overflowing} elements, scrollWidth ${cal.scrollWidth}`);
+      console.log(`  calendar: ${cal.dotted} dotted days; caption: ${cal.caption}`);
+      await page.screenshot({ path: join(outDir, `${name}-after-calendar-month.png`) });
+
+      // Tap the last dotted day (lowest on the grid, so the card has to fit
+      // below it) and compare the card against the day's own unit list.
+      await page.locator(".tsm-cal-day.tsm-cal-has").last().click();
+      await page.waitForTimeout(400);
+      const pop = await page.evaluate((personName) => {
+        const pop = document.querySelector(".tsm-pop");
+        const r = pop.getBoundingClientRect();
+        const cell = document.querySelector(".tsm-cal-day.tsm-cal-active");
+        const dayNum = cell?.querySelector(".tsm-cal-num")?.textContent;
+        const dots = cell ? (cell.querySelector(".tsm-cal-count") ? Number(cell.querySelector(".tsm-cal-count").textContent) : cell.querySelectorAll(".tsm-cal-dot").length) : -1;
+        const shifts = [...pop.querySelectorAll(".tsm-pop-shift")].map((s) => ({
+          unit: s.querySelector(".tsm-pop-unit")?.textContent,
+          time: s.querySelector(".tsm-pop-time")?.textContent,
+          with: [...s.querySelectorAll(".tsm-pop-with")].map((w) => [...w.children].map((c) => c.textContent).join(" ") || w.textContent),
+        }));
+        // Independent expectation from the day cell: every highlighted slot's
+        // unit and time, plus the other crew with the identical time string.
+        const key = (t) => {
+          const w = t.replace(/\u00a0/g, " ").trim().split(/\s+/);
+          return w.length < 2 ? w[0] : `${w[0].split("-")[0]} ${w[w.length - 1]}`.toLowerCase();
+        };
+        const td = document.getElementById(`day_${dayNum}`);
+        const expected = [...td.querySelectorAll("tr.tsm-match-slot")].map((tr) => {
+          const unit = tr.closest(".tsm-unit");
+          const time = tr.querySelector("td.timerange").textContent.trim();
+          const mates = [...unit.querySelectorAll("tr.employee")]
+            .filter((o) => o !== tr && o.querySelector("td.timerange").textContent.trim() === time && key(o.querySelector("td").textContent) !== key(tr.querySelector("td").textContent))
+            .map((o) => o.querySelector("td").textContent.replace(/\u00a0/g, " ").trim());
+          return { unitText: unit.querySelector("div.location").textContent.trim(), time, mates };
+        });
+        return {
+          shown: !pop.hidden && r.width > 0,
+          left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom),
+          docBottom: Math.round(r.bottom + scrollY), docHeight: document.documentElement.scrollHeight,
+          title: pop.querySelector(".tsm-pop-title")?.textContent,
+          dayNum, dots, shifts, expected,
+          goVisible: Boolean(pop.querySelector(".tsm-pop-go")?.offsetParent),
+          personKey: key(personName),
+        };
+      }, person);
+      if (!pop.shown) fail("tapping a dotted day did not open the shift card");
+      if (pop.left < 0 || pop.right > VIEWPORT.width) fail(`shift card off-screen horizontally: ${pop.left}..${pop.right}`);
+      if (pop.docBottom > pop.docHeight) fail(`shift card extends past the page bottom: ${pop.docBottom} > ${pop.docHeight}`);
+      if (pop.shifts.length !== pop.dots || pop.shifts.length !== pop.expected.length) fail(`card lists ${pop.shifts.length} shifts, day shows ${pop.dots} dots, cell has ${pop.expected.length} matches`);
+      if (!pop.goVisible) fail("shift card has no See-this-day button");
+      for (const [i, s] of pop.shifts.entries()) {
+        const e = pop.expected[i];
+        if (!s.unit || !s.time) fail(`shift ${i + 1} on the card is missing unit or time`);
+        if (e && !e.unitText.startsWith(s.unit)) fail(`shift ${i + 1}: card says "${s.unit}", cell says "${e.unitText}"`);
+        if (e && e.time !== s.time) fail(`shift ${i + 1}: card says ${s.time}, cell says ${e.time}`);
+        const withText = s.with.join(" | ");
+        for (const mate of e?.mates ?? []) {
+          if (!withText.includes(mate)) fail(`shift ${i + 1}: crewmate "${mate}" missing from the card (${withText})`);
+        }
+        const selfListed = s.with.some((w) => w.toLowerCase().includes(pop.personKey.split(" ")[1] || "\u0000") && w.toLowerCase().includes(pop.personKey.split(" ")[0]));
+        if (selfListed) fail(`shift ${i + 1}: the person is listed as their own crewmate (${withText})`);
+      }
+      console.log(`  shift card for ${pop.title}: ${pop.shifts.map((s) => `${s.unit} ${s.time} [${s.with.join("; ")}]`).join(" · ")}`);
+      await page.screenshot({ path: join(outDir, `${name}-after-calendar-popup.png`) });
+
+      // "See this day" returns to the list on that day.
+      await page.locator(".tsm-pop-go").click();
+      await page.waitForTimeout(200);
+      const back = await page.evaluate(() => ({
+        on: Boolean(document.documentElement.dataset.tsmCal),
+        selected: document.querySelector('td[id^="day_"].tsm-selected')?.id,
+        visibleDays: [...document.querySelectorAll('td[id^="day_"]')].filter((td) => td.offsetParent !== null).length,
+        popHidden: document.querySelector(".tsm-pop").hidden,
+        button: document.querySelector(".tsm-calbtn")?.textContent,
+      }));
+      if (back.on || back.visibleDays !== 1 || !back.popHidden || back.button !== "Calendar") fail("See this day did not return to list mode");
+      if (back.selected !== `day_${pop.dayNum}`) fail(`See this day landed on ${back.selected}, expected day_${pop.dayNum}`);
+
       await page.locator(".tsm-search-clear").click();
       await page.waitForTimeout(300);
       const cleared = await page.evaluate(() => ({
@@ -209,6 +322,17 @@ for (const file of pages) {
         badges: document.querySelectorAll(".tsm-chip-has-match").length,
       }));
       if (cleared.active || cleared.badges) fail("clearing the person filter did not reset it");
+
+      // Calendar with nothing typed: no dots, a hint instead.
+      await page.locator(".tsm-calbtn").click();
+      await page.waitForTimeout(200);
+      const empty = await page.evaluate(() => ({
+        dotted: document.querySelectorAll(".tsm-cal-has").length,
+        caption: document.querySelector(".tsm-cal-caption")?.textContent || "",
+      }));
+      if (empty.dotted || !/type a name/i.test(empty.caption)) fail(`empty calendar: ${empty.dotted} dotted days, caption "${empty.caption}"`);
+      await page.locator(".tsm-calbtn").click();
+      await page.waitForTimeout(200);
     }
 
     // The site's own confirm dialog, opened directly (no network involved).

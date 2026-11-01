@@ -27,6 +27,12 @@ phone widths:
     their name is highlighted, and the day chips show how many shifts they
     have on each day of the month, so you can see their whole month at a
     glance. Matching is word-prefix based, so "bob smi" finds "Bob-PB Smith".
+  - **Calendar**: the button beside the person box swaps the day strip and
+    unit list for a month grid with a dot for each of that person's shifts.
+    Tapping a day opens a card under its row listing each shift: unit, hours,
+    and who else is on that unit for those hours ("with Jane Doe") or that
+    the other seat is open ("open seat EMT", tagged "you can request" when
+    you could take it). "See this day" returns to the list on that day.
   - Open slots you can request are green "EMT open · Request" buttons. They
     are the site's own `requestPickupShift` elements, just restyled, so
     tapping one opens the site's normal confirmation dialog. Open slots you
@@ -53,8 +59,8 @@ desktop Firefox (`about:debugging`, USB).
 ```
 src/
   manifest.json   Manifest V3, Firefox 142+
-  content.css     all styling, scoped to html.tsm
-  content.js      adds classes, wraps the day numbers, builds the pager
+  content.css     all styling, scoped to html[data-tsm="on"]
+  content.js      adds classes, wraps the day numbers, builds the pager and calendar
   icons/
 test/render.mjs   renders saved pages at phone width and checks the result
 ```
@@ -84,8 +90,10 @@ It loads each page in headless Chromium with every non-`file://` request
 blocked, injects the add-on's CSS and script, and checks that the page no
 longer overflows, that the pickup handlers are untouched, that the location
 view shows exactly one day with a chip per day, that the "Open only" and
-person filters hide the right units, and that the confirmation dialog fits
-the viewport. Screenshots of every state land in `test/out/`.
+person filters hide the right units, that the person calendar's dots agree
+with the day chips and its shift card matches the day's own unit list, and
+that the confirmation dialog fits the viewport. Screenshots of every state
+land in `test/out/`.
 
 ## Distribution
 

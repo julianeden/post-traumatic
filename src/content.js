@@ -7,7 +7,7 @@
 // pager for the location (all-units) views.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
-// data-tsm-filter, data-tsm-name); the stylesheet keys off those.
+// data-tsm-filter, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
 "use strict";
 
 (() => {
@@ -368,6 +368,7 @@
     filters.append(filterButton("All units", ""), filterButton("Open only", "open"));
 
     const search = el("div", "tsm-search");
+    const field = el("div", "tsm-search-field");
     const input = document.createElement("input");
     input.type = "search";
     input.className = "tsm-search-input";
@@ -379,12 +380,42 @@
     clear.className = "tsm-search-clear";
     clear.textContent = "×";
     clear.setAttribute("aria-label", "Clear person filter");
-    search.append(input, clear);
+    field.append(input, clear);
+    const calBtn = document.createElement("button");
+    calBtn.type = "button";
+    calBtn.className = "tsm-calbtn";
+    calBtn.textContent = "Calendar";
+    calBtn.setAttribute("aria-pressed", "false");
+    calBtn.setAttribute("aria-label", "Show this person's month as a calendar");
+    search.append(field, calBtn);
 
     const status = el("div", "tsm-status");
 
     pager.append(title, nav, filters, search, status);
     month.parentNode.insertBefore(pager, month);
+
+    // Month grid for the person being searched for, shown in place of the
+    // day strip and unit list while data-tsm-cal is on.
+    const cal = el("div", "tsm-cal");
+    const calCaption = el("div", "tsm-cal-caption");
+    const grid = el("div", "tsm-cal-grid");
+    for (const wd of WEEKDAYS) grid.append(el("div", "tsm-cal-wd", wd.slice(0, 2)));
+    for (let i = 0; i < (days[0]?.cellIndex ?? 0); i++) grid.append(el("div", "tsm-cal-blank"));
+    const calDays = days.map((td, i) => {
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = "tsm-cal-day";
+      if (td.classList.contains("tsm-today")) cell.classList.add("tsm-cal-today");
+      if (td.classList.contains("tsm-past")) cell.classList.add("tsm-cal-past");
+      cell.append(el("span", "tsm-cal-num", td.id.slice(4)), el("span", "tsm-cal-dots"));
+      cell.addEventListener("click", () => openPopup(i));
+      grid.append(cell);
+      return cell;
+    });
+    const pop = el("div", "tsm-pop");
+    pop.hidden = true;
+    cal.append(calCaption, grid);
+    month.parentNode.insertBefore(cal, month);
 
     const chips = days.map((td) => {
       const chip = document.createElement("button");
@@ -408,15 +439,17 @@
 
     // Crew slots per day, tokenised once for the person filter.
     const slotsByDay = days.map((td) =>
-      [...td.querySelectorAll("tr.employee")].map((tr) => ({
-        tr,
-        unit: tr.closest(".tsm-unit"),
-        tokens: nameTokens(tr.querySelector("td")?.textContent || ""),
-      })),
+      [...td.querySelectorAll("tr.employee")].map((tr) => {
+        const name = tidy(tr.querySelector("td")?.textContent || "");
+        const time = timeOf(tr);
+        return { tr, unit: tr.closest(".tsm-unit"), name, time, range: parseRange(time), tokens: nameTokens(name) };
+      }),
     );
     const matchesByDay = days.map(() => 0);
+    const hitsByDay = days.map(() => []);
     let query = "";
     let current = -1;
+    let popDay = -1;
     let userKnown = false;
 
     function select(index, { scroll = true } = {}) {
@@ -470,12 +503,14 @@
       days.forEach((td, i) => {
         let count = 0;
         const matchedUnits = new Set();
+        hitsByDay[i] = [];
         for (const slot of slotsByDay[i]) {
           const hit = words.length > 0 && words.every((w) => slot.tokens.some((t) => t.startsWith(w)));
           slot.tr.classList.toggle("tsm-match-slot", hit);
           if (hit) {
             count += 1;
             matchedUnits.add(slot.unit);
+            hitsByDay[i].push(slot);
           }
         }
         for (const unit of td.querySelectorAll(".tsm-unit")) {
@@ -488,6 +523,8 @@
         badge.textContent = String(count);
         chips[i].classList.toggle("tsm-chip-has-match", count > 0);
       });
+
+      refreshCalendar();
 
       // Jump to the first day that has this person if the current one doesn't.
       if (words.length > 0 && total > 0 && matchesByDay[current] === 0) {
@@ -520,6 +557,129 @@
       else if (query) parts.push(`On ${visible} unit${visible === 1 ? "" : "s"} this day.`);
       else parts.push(`${visible} of ${units.length} units · ${open} open shift${open === 1 ? "" : "s"}`);
       status.textContent = parts.join(" ");
+    }
+
+    function setCalendarMode(on) {
+      if (on) html.dataset.tsmCal = "on";
+      else delete html.dataset.tsmCal;
+      calBtn.classList.toggle("tsm-calbtn-active", on);
+      calBtn.setAttribute("aria-pressed", String(on));
+      calBtn.textContent = on ? "List" : "Calendar";
+      if (on) {
+        refreshCalendar();
+        if (!query) input.focus();
+      } else {
+        closePopup();
+        if (current >= 0) select(current, { scroll: false });
+      }
+    }
+
+    // Redraws the dots from hitsByDay and the caption above the grid.
+    function refreshCalendar() {
+      closePopup();
+      days.forEach((td, i) => {
+        const n = hitsByDay[i].length;
+        const cell = calDays[i];
+        const dots = cell.querySelector(".tsm-cal-dots");
+        dots.replaceChildren();
+        if (n > 3) dots.append(el("span", "tsm-cal-count", String(n)));
+        else for (let k = 0; k < n; k++) dots.append(el("i", "tsm-cal-dot"));
+        cell.classList.toggle("tsm-cal-has", n > 0);
+        cell.setAttribute("aria-label", `${dayLabel(td)}: ${n} shift${n === 1 ? "" : "s"}`);
+      });
+      const total = matchesByDay.reduce((a, b) => a + b, 0);
+      const dayCount = matchesByDay.filter((n) => n > 0).length;
+      if (!query) calCaption.textContent = "Type a name above to see their shifts on the calendar.";
+      else if (total === 0) calCaption.textContent = `No one matching “${query}” this month.`;
+      else calCaption.textContent = `“${query}”: ${total} shift${total === 1 ? "" : "s"} on ${dayCount} day${dayCount === 1 ? "" : "s"}. Tap a day for details.`;
+    }
+
+    // Card with that day's shifts, opened in the grid under the tapped day's
+    // row so the rows below move down and stay tappable.
+    function openPopup(i) {
+      const td = days[i];
+      const cell = calDays[i];
+      if (popDay >= 0) calDays[popDay].classList.remove("tsm-cal-active");
+      popDay = i;
+      cell.classList.add("tsm-cal-active");
+      select(i, { scroll: false });
+
+      const head = el("div", "tsm-pop-head");
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "tsm-pop-close";
+      close.textContent = "×";
+      close.setAttribute("aria-label", "Close");
+      close.addEventListener("click", closePopup);
+      head.append(el("div", "tsm-pop-title", dayLabel(td)), close);
+      pop.replaceChildren(head);
+
+      const hits = hitsByDay[i];
+      if (hits.length === 0) {
+        pop.append(el("div", "tsm-pop-empty", query ? `No shifts for “${query}” on this day.` : "Type a name above to see their shifts."));
+      }
+      for (const slot of hits) pop.append(renderShift(slot));
+
+      const go = document.createElement("button");
+      go.type = "button";
+      go.className = "tsm-pop-go";
+      go.textContent = "See this day ›";
+      go.addEventListener("click", () => setCalendarMode(false));
+      pop.append(go);
+
+      pop.remove();
+      const items = [...grid.children];
+      const rowEnd = Math.min(items.length - 1, items.indexOf(cell) + 6 - ((items.indexOf(cell) - WEEKDAYS.length) % 7));
+      items[rowEnd].after(pop);
+      pop.hidden = false;
+      pop.style.setProperty("--tsm-caret", `${cell.offsetLeft - pop.offsetLeft + cell.offsetWidth / 2}px`);
+      pop.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+
+    function closePopup() {
+      if (popDay >= 0) calDays[popDay].classList.remove("tsm-cal-active");
+      popDay = -1;
+      pop.hidden = true;
+    }
+
+    function renderShift(slot) {
+      const row = el("div", "tsm-pop-shift");
+      const line = el("div", "tsm-pop-line");
+      line.append(el("span", "tsm-pop-unit", unitName(slot.unit)), el("span", "tsm-pop-time", slot.time));
+      row.append(line);
+      const crew = crewFor(slot);
+      if (crew.length === 0) row.append(el("div", "tsm-pop-with tsm-pop-solo", "No one else on this unit"));
+      for (const c of crew) {
+        const w = el("div", c.open ? "tsm-pop-with tsm-pop-open" : "tsm-pop-with");
+        w.append(el("span", "tsm-pop-with-label", c.open ? "open seat" : "with"), el("span", "tsm-pop-with-name", c.name));
+        if (c.time !== slot.time) w.append(el("span", "tsm-pop-with-time", c.time));
+        if (c.requestable) w.append(el("span", "tsm-pop-tag", "you can request"));
+        row.append(w);
+      }
+      return row;
+    }
+
+    // The other seats on the same unit whose hours overlap this slot's.
+    function crewFor(slot) {
+      const out = [];
+      for (const tr of slot.unit.querySelectorAll("table.shifts > tbody > tr")) {
+        if (tr === slot.tr) continue;
+        const time = timeOf(tr);
+        const range = parseRange(time);
+        const together = slot.range && range
+          ? Math.min(slot.range.end, range.end) > Math.max(slot.range.start, range.start)
+          : time === slot.time;
+        if (!together) continue;
+        if (tr.classList.contains("employee")) {
+          const name = tidy(tr.querySelector("td")?.textContent || "");
+          if (nameKey(name) === nameKey(slot.name)) continue;
+          out.push({ name, time, open: false });
+        } else {
+          const label = tidy(tr.querySelector("span.hightlight")?.textContent || "").replace(/\s*open$/i, "");
+          out.push({ name: label || "Open", time, open: true, requestable: tr.classList.contains("unassigned") });
+        }
+      }
+      return out;
     }
 
     // Called once the signed-in name is known: flags their slots, dots the
@@ -558,6 +718,14 @@
       applyNameFilter("");
       input.focus();
     });
+    calBtn.addEventListener("click", () => setCalendarMode(!html.dataset.tsmCal));
+    document.addEventListener("click", (e) => {
+      if (popDay < 0 || pop.contains(e.target) || e.target.closest?.(".tsm-cal-day")) return;
+      closePopup();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closePopup();
+    });
 
     const saved = savedFilter();
     setFilter(saved === "mine" ? "" : saved);
@@ -566,6 +734,37 @@
     select(todayIndex >= 0 ? todayIndex : 0, { scroll: false });
 
     return { setUser };
+  }
+
+  function tidy(text) {
+    return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function timeOf(tr) {
+    return tidy(tr.querySelector("td.timerange")?.textContent || "");
+  }
+
+  // "7:00pm-7:00am" -> minutes from midnight; an end at or before the start
+  // is the next day.
+  function parseRange(text) {
+    const m = /(\d{1,2}):(\d{2})\s*([ap])m?\s*[-–]\s*(\d{1,2}):(\d{2})\s*([ap])m?/i.exec(text);
+    if (!m) return null;
+    const minutes = (h, mi, ap) => ((Number(h) % 12) + (ap.toLowerCase() === "p" ? 12 : 0)) * 60 + Number(mi);
+    const start = minutes(m[1], m[2], m[3]);
+    let end = minutes(m[4], m[5], m[6]);
+    if (end <= start) end += 24 * 60;
+    return { start, end };
+  }
+
+  // "Alpha 2 (Alpha 2)" -> "Alpha 2"; "A24 (MED A-24)" is kept whole.
+  function unitName(unit) {
+    const text = tidy(unit.querySelector("div.location")?.textContent || "");
+    const m = /^(.*?)\s*\((.*)\)$/.exec(text);
+    return m && m[1] === m[2] ? m[1] : text;
+  }
+
+  function dayLabel(td) {
+    return td.querySelector(".tsm-daylong")?.textContent || td.id.slice(4);
   }
 
   function el(tag, className, text) {
