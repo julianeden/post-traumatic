@@ -4,7 +4,9 @@
 // open-shift <span onclick="requestPickupShift(...)"> buttons, stays where it
 // is so the site's own scripts and dialogs keep working. This script only adds
 // classes, wraps bare text nodes so CSS can style them, and inserts a day
-// pager for the location (all-units) views.
+// pager for the location (all-units) views. On the individual view it also
+// loads the site's own unit views for the month to show who is on each of
+// your shifts.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-filter, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -17,6 +19,9 @@
   // Views listed in the first dropdown, by label after the prefix is removed.
   const COMMON_VIEWS = ["individual month view", "available open shifts", "als", "bls", "details", "dispatch"];
   const VIEW_PREFIX = /^vehicle\/location month view\s*-\s*/i;
+  // Unit views searched, in order, for the crew on each of your shifts.
+  const CREW_VIEWS = ["bls", "als", "details"];
+  const CREW_CACHE_MS = 10 * 60 * 1000;
   const html = document.documentElement;
 
   // Progress notes go to the console (filter on "Traumasoft Mobile").
@@ -113,6 +118,7 @@
     } else {
       html.dataset.tsmMode = "agenda";
       addTodayButton(month);
+      loadCrew(days).catch((e) => diag.log(`crew: ${e && e.message ? e.message : e}`));
     }
     diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
   }
@@ -218,7 +224,10 @@
         return;
       }
       if (++tries < 20) setTimeout(attempt, 500);
-      else diag.log("signed-in name not found in header");
+      else {
+        diag.log("signed-in name not found in header");
+        callback(null);
+      }
     };
     attempt();
   }
@@ -350,6 +359,224 @@
       today.scrollIntoView({ block: "start", behavior: "smooth" });
     });
     document.body.append(btn);
+  }
+
+  // ---- agenda view: crew on each of your shifts --------------------------
+
+  // Adds a crew line to every shift card, then fills it in from the unit
+  // views: who shares the unit for those hours, or that the seat is open,
+  // with a "See spares" list of others working then without a partner.
+  async function loadCrew(days) {
+    const shifts = [];
+    for (const td of days) {
+      for (const table of td.querySelectorAll("table.tsm-shift")) {
+        const main = table.querySelector("tr.tsm-shift-main");
+        const time = tidy(main?.querySelector("td.timerange")?.textContent || "");
+        const range = parseRange(time);
+        if (!main || !range) continue;
+        const row = el("tr", "tsm-shift-crew");
+        const cell = document.createElement("td");
+        cell.colSpan = 2;
+        cell.append(el("span", "tsm-crew-note", "Checking crew…"));
+        row.append(cell);
+        main.after(row);
+        shifts.push({ td, table, cell, day: Number(td.id.slice(4)), unit: tidy(main.querySelector("td")?.textContent || ""), time, range, past: td.classList.contains("tsm-past") });
+      }
+    }
+    if (shifts.length === 0) return;
+
+    const user = await new Promise((resolve) => whenUserNameKnown(resolve));
+    const me = user ? nameKey(user) : null;
+    const unmatched = () => shifts.filter((s) => !s.unit_match);
+    const views = [];
+    let failed = 0;
+    for (const label of CREW_VIEWS) {
+      if (unmatched().length === 0) break;
+      try {
+        const view = await fetchUnitView(label);
+        if (!view) continue;
+        views.push(view);
+        for (const s of unmatched()) s.unit_match = findUnit(view, s, me);
+        diag.log(`crew: ${label} view loaded, ${unmatched().length} shifts still unmatched`);
+      } catch (e) {
+        failed += 1;
+        diag.log(`crew: ${label} view failed: ${e && e.message ? e.message : e}`);
+      }
+    }
+
+    for (const s of shifts) {
+      s.cell.replaceChildren();
+      if (!s.unit_match) {
+        s.cell.append(el("span", "tsm-crew-note", views.length === 0 && failed ? "Couldn't load the unit views." : "Crew not shown in the unit views."));
+        continue;
+      }
+      const crew = crewOf(s.unit_match, s.range, me);
+      const partners = crew.filter((c) => !c.open);
+      const open = crew.filter((c) => c.open);
+      for (const c of partners) s.cell.append(crewLine("with", c, s.range));
+      for (const c of open) s.cell.append(crewLine("open seat", c, s.range));
+      if (crew.length === 0) s.cell.append(el("span", "tsm-crew-note", "No one else on this unit."));
+      if (!s.past && (open.length > 0 || partners.length === 0)) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "tsm-spares-btn";
+        btn.textContent = "See spares";
+        btn.setAttribute("aria-expanded", "false");
+        btn.addEventListener("click", () => toggleSpares(s, btn, views, me));
+        s.cell.append(btn);
+      }
+    }
+  }
+
+  function crewLine(label, c, range) {
+    const line = el("div", c.open ? "tsm-crew tsm-crew-open" : "tsm-crew");
+    line.append(el("span", "tsm-crew-label", label), el("span", "tsm-crew-name", c.name));
+    if (c.range && (c.range.start !== range.start || c.range.end !== range.end)) line.append(el("span", "tsm-crew-time", c.time));
+    return line;
+  }
+
+  function toggleSpares(s, btn, views, me) {
+    let panel = s.table.querySelector("tr.tsm-shift-spares");
+    if (panel) {
+      panel.remove();
+      btn.setAttribute("aria-expanded", "false");
+      btn.textContent = "See spares";
+      return;
+    }
+    panel = el("tr", "tsm-shift-spares");
+    const cell = document.createElement("td");
+    cell.colSpan = 2;
+    const spares = sparesFor(views, s.day, s.range, me);
+    cell.append(el("div", "tsm-spares-title", spares.length === 0
+      ? "No one else is working these hours without a partner."
+      : `${spares.length} without a partner during these hours`));
+    for (const sp of spares) {
+      const row = el("div", "tsm-spare");
+      const top = el("div", "tsm-spare-line");
+      top.append(el("span", "tsm-spare-name", sp.name), el("span", "tsm-spare-time", sp.time));
+      const sub = el("div", "tsm-spare-sub");
+      sub.append(el("span", "tsm-spare-unit", sp.unit), el("span", "tsm-spare-overlap", `${hoursText(sp.overlap)} together`));
+      row.append(top, sub);
+      cell.append(row);
+    }
+    panel.append(cell);
+    s.table.querySelector("tr.tsm-shift-crew").after(panel);
+    btn.setAttribute("aria-expanded", "true");
+    btn.textContent = "Hide spares";
+  }
+
+  function hoursText(minutes) {
+    const h = minutes / 60;
+    return `${Number.isInteger(h) ? h : h.toFixed(1)}h`;
+  }
+
+  // Loads a unit view for the month shown, the way the Go button does, and
+  // returns { label, days: { [dayNumber]: [unit] } }. Parsed results are kept
+  // for a few minutes so flipping between views does not reload them.
+  async function fetchUnitView(label) {
+    const viewSelect = document.getElementById("view_select");
+    const option = viewSelect && [...viewSelect.options].find((o) => o.textContent.trim().replace(VIEW_PREFIX, "").toLowerCase() === label);
+    if (!option) return null;
+    const form = document.getElementById("calendar_select");
+    const month = document.getElementById("StartMonth")?.value || "";
+    const year = document.getElementById("StartYear")?.value || "";
+    const cacheKey = `tsm.view.${label}.${year}-${month}`;
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+      if (cached && Date.now() - cached.at < CREW_CACHE_MS) return { label, days: cached.days };
+    } catch {
+      // no cache available; load the view
+    }
+    const body = form ? new FormData(form) : new FormData();
+    body.set("view_select", option.value);
+    if (month) body.set("cal_start_month", month);
+    if (year) body.set("cal_start_year", year);
+    const res = await fetch(new URL(option.value, location.href), { method: "POST", body, credentials: "same-origin" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const doc = new DOMParser().parseFromString(await res.text(), "text/html");
+    const days = parseUnitView(doc);
+    if (Object.keys(days).length === 0) throw new Error("no calendar in response");
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify({ at: Date.now(), days }));
+    } catch {
+      // storage full or unavailable; fine
+    }
+    return { label, days };
+  }
+
+  function parseUnitView(doc) {
+    const days = {};
+    for (const td of doc.querySelectorAll('table.month td[id^="day_"]')) {
+      const units = [];
+      for (const tr of td.querySelectorAll("table.eventcontent > tbody > tr")) {
+        const heading = tidy(tr.querySelector("div.location")?.textContent || "");
+        if (!heading) continue;
+        const m = /^(.*?)\s*\((.*)\)$/.exec(heading);
+        const slots = [...tr.querySelectorAll("table.shifts > tbody > tr")].map((row) => {
+          const open = !row.classList.contains("employee");
+          const text = tidy((open ? row.querySelector("span.hightlight") : row.querySelector("td"))?.textContent || "");
+          return { who: open ? text.replace(/\s*open$/i, "") || "Open" : text, time: timeOf(row), open, requestable: row.classList.contains("unassigned") };
+        });
+        units.push({ name: m ? m[1] : heading, label: m ? m[2] : "", slots });
+      }
+      days[Number(td.id.slice(4))] = units;
+    }
+    return days;
+  }
+
+  // The unit in a view that carries this shift: same unit name (either half
+  // of "Alpha 8 (Alpha 8)" / "MED A-24 (A-28)") with hours that overlap, or
+  // failing that any unit listing you for those hours.
+  function findUnit(view, shift, me) {
+    const units = view.days[shift.day] || [];
+    const m = /^(.*?)\s*\((.*)\)$/.exec(shift.unit);
+    const wanted = new Set([m ? m[1] : shift.unit, m ? m[2] : ""].filter(Boolean).map((t) => t.toLowerCase()));
+    const overlapping = (u) => u.slots.some((x) => overlap(parseRange(x.time), shift.range) > 0);
+    return units.find((u) => (wanted.has(u.name.toLowerCase()) || wanted.has(u.label.toLowerCase())) && overlapping(u))
+      || (me && units.find((u) => u.slots.some((x) => !x.open && nameKey(x.who) === me && overlap(parseRange(x.time), shift.range) > 0)))
+      || null;
+  }
+
+  function crewOf(unit, range, me) {
+    const out = [];
+    for (const x of unit.slots) {
+      const r = parseRange(x.time);
+      if (overlap(r, range) <= 0) continue;
+      if (!x.open && me && nameKey(x.who) === me) continue;
+      out.push({ name: x.who, time: x.time, range: r, open: x.open, requestable: x.requestable });
+    }
+    return out;
+  }
+
+  // Everyone else on that day whose hours overlap these and who has no other
+  // employee on their unit for their own hours.
+  function sparesFor(views, day, range, me) {
+    const seen = new Set();
+    const out = [];
+    for (const view of views) {
+      for (const unit of view.days[day] || []) {
+        for (const x of unit.slots) {
+          if (x.open || (me && nameKey(x.who) === me)) continue;
+          const r = parseRange(x.time);
+          const together = overlap(r, range);
+          if (together <= 0) continue;
+          const partnered = unit.slots.some((y) => y !== x && !y.open && overlap(parseRange(y.time), r) > 0);
+          if (partnered) continue;
+          const key = `${unit.name}|${x.who}|${x.time}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const unitText = unit.label && unit.label.toLowerCase() !== unit.name.toLowerCase() ? `${unit.name} (${unit.label})` : unit.name;
+          out.push({ name: x.who, unit: unitText, time: x.time, range: r, overlap: together });
+        }
+      }
+    }
+    out.sort((a, b) => b.overlap - a.overlap || a.range.start - b.range.start || a.name.localeCompare(b.name));
+    return out;
+  }
+
+  function overlap(a, b) {
+    if (!a || !b) return 0;
+    return Math.min(a.end, b.end) - Math.max(a.start, b.start);
   }
 
   // ---- location view (every unit, one day at a time) --------------------
@@ -744,12 +971,15 @@
     return tidy(tr.querySelector("td.timerange")?.textContent || "");
   }
 
-  // "7:00pm-7:00am" -> minutes from midnight; an end at or before the start
-  // is the next day.
+  // "7:00pm-7:00am" or "19:00-07:00" -> minutes from midnight; an end at or
+  // before the start is the next day.
   function parseRange(text) {
-    const m = /(\d{1,2}):(\d{2})\s*([ap])m?\s*[-–]\s*(\d{1,2}):(\d{2})\s*([ap])m?/i.exec(text);
+    const m = /(\d{1,2}):(\d{2})\s*([ap])?m?\s*[-–]\s*(\d{1,2}):(\d{2})\s*([ap])?m?/i.exec(text || "");
     if (!m) return null;
-    const minutes = (h, mi, ap) => ((Number(h) % 12) + (ap.toLowerCase() === "p" ? 12 : 0)) * 60 + Number(mi);
+    const minutes = (h, mi, ap) => {
+      const hour = ap ? (Number(h) % 12) + (ap.toLowerCase() === "p" ? 12 : 0) : Number(h);
+      return hour * 60 + Number(mi);
+    };
     const start = minutes(m[1], m[2], m[3]);
     let end = minutes(m[4], m[5], m[6]);
     if (end <= start) end += 24 * 60;

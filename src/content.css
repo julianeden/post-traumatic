@@ -353,6 +353,7 @@ html[data-tsm-mode="agenda"] td.tsm-empty .tsm-daynum {
 }
 
 html[data-tsm-mode="agenda"] td.tsm-empty.tsm-today .tsm-daynum {
+  background: none;
   color: #003060;
   font-weight: 800;
 }
@@ -427,6 +428,130 @@ html[data-tsm-mode="agenda"] .tsm-shift-details > td {
 
 html[data-tsm-mode="agenda"] .tsm-spacer {
   display: none;
+}
+
+/* crew line under each shift, and the spares list */
+html[data-tsm-mode="agenda"] .tsm-shift-crew,
+html[data-tsm-mode="agenda"] .tsm-shift-spares {
+  display: block;
+}
+
+html[data-tsm-mode="agenda"] .tsm-shift-crew > td,
+html[data-tsm-mode="agenda"] .tsm-shift-spares > td {
+  display: block;
+  padding: 4px 0 0 !important;
+}
+
+html[data-tsm-mode="agenda"] .tsm-crew-note {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+html[data-tsm-mode="agenda"] .tsm-crew {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  margin-top: 2px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+html[data-tsm-mode="agenda"] .tsm-crew-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html[data-tsm-mode="agenda"] .tsm-crew-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+html[data-tsm-mode="agenda"] .tsm-crew-open .tsm-crew-label,
+html[data-tsm-mode="agenda"] .tsm-crew-open .tsm-crew-name {
+  color: #3f7d1a;
+}
+
+html[data-tsm-mode="agenda"] .tsm-crew-time {
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spares-btn {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 7px 14px;
+  border: 1px solid #003060;
+  border-radius: 999px;
+  background: #fff;
+  color: #003060;
+  font: 700 13px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spares-btn[aria-expanded="true"] {
+  background: #003060;
+  color: #fff;
+}
+
+html[data-tsm-mode="agenda"] .tsm-shift-spares > td {
+  margin-top: 8px;
+  padding: 8px 10px !important;
+  border-radius: 10px;
+  background: #f3f5f8;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spares-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spare {
+  padding: 7px 0;
+  border-top: 1px solid #e3e6ea;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spares-title + .tsm-spare {
+  margin-top: 6px;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spare-line,
+html[data-tsm-mode="agenda"] .tsm-spare-sub {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spare-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spare-time {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spare-sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+html[data-tsm-mode="agenda"] .tsm-spare-overlap {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 html[data-tsm="on"] .tsm-fab {

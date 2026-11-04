@@ -5,7 +5,7 @@
 // names, so they live outside the repo. Point TSM_FIXTURES at the folder
 // (default: test/fixtures). Every request that is not file:// is blocked, so
 // nothing reaches the real site.
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -63,6 +63,21 @@ for (const file of pages) {
     hasMonth: Boolean(document.querySelector("table.month")),
   }));
   await page.screenshot({ path: join(outDir, `${name}-before.png`) });
+
+  // The individual view asks the site for the unit views; serve the saved
+  // BLS page for that request and fail the rest, recording what was asked.
+  const blsFixture = pages.find((f) => /schedule2/i.test(f)) || null;
+  const blsHtml = blsFixture ? readFileSync(join(fixtures, blsFixture), "utf8") : "";
+  await page.evaluate((html) => {
+    window.__tsmFetches = [];
+    window.fetch = async (url, init) => {
+      const u = String(url);
+      const body = init?.body instanceof FormData ? Object.fromEntries([...init.body.entries()].map(([k, v]) => [k, String(v)])) : init?.body;
+      window.__tsmFetches.push({ url: u, method: init?.method || "GET", body, credentials: init?.credentials });
+      if (/template_id=59\b/.test(u) && html) return new Response(html, { status: 200, headers: { "Content-Type": "text/html" } });
+      return new Response("", { status: 404 });
+    };
+  }, blsHtml);
 
   await page.addStyleTag({ path: cssPath });
   await page.addScriptTag({ path: jsPath });
@@ -144,6 +159,109 @@ for (const file of pages) {
     });
     if (month !== 2) fail("changing the month did not submit the form");
     else console.log(`  view change and month change both submitted the form (${bls.submits[0].replace(/^.*main\.php/, "main.php")})`);
+  }
+
+  if (after.mode === "agenda" && blsHtml) {
+    await page.waitForFunction(() => ![...document.querySelectorAll(".tsm-crew-note")].some((n) => /checking/i.test(n.textContent)), null, { timeout: 10_000 }).catch(() => {});
+    const crew = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll("table.tsm-shift")].map((t) => ({
+        day: Number(t.closest('td[id^="day_"]').id.slice(4)),
+        unit: t.querySelector(".tsm-shift-main td")?.textContent.replace(/\u00a0/g, " ").trim(),
+        time: t.querySelector(".tsm-shift-main td.timerange")?.textContent.trim(),
+        past: t.closest('td[id^="day_"]').classList.contains("tsm-past"),
+        note: t.querySelector(".tsm-crew-note")?.textContent || "",
+        with: [...t.querySelectorAll(".tsm-crew:not(.tsm-crew-open) .tsm-crew-name")].map((n) => n.textContent),
+        open: [...t.querySelectorAll(".tsm-crew-open .tsm-crew-name")].map((n) => n.textContent),
+        spares: Boolean(t.querySelector(".tsm-spares-btn")),
+      }));
+      return { fetches: window.__tsmFetches, cards };
+    });
+    const first = crew.fetches[0];
+    console.log(`  crew: ${crew.fetches.length} view request(s): ${crew.fetches.map((f) => `${f.method} ${f.url.replace(/^.*main\.php/, "main.php")}`).join(" ; ")}`);
+    if (!first) fail("individual view did not request a unit view");
+    else {
+      if (first.method !== "POST" || !/template_id=59\b/.test(first.url)) fail(`first unit-view request should POST to the BLS view, was ${first.method} ${first.url}`);
+      const b = first.body || {};
+      if (!b._csrf || !b.cal_start_month || !b.cal_start_year) fail(`unit-view request is missing form fields: ${JSON.stringify(b)}`);
+      if (first.credentials !== "same-origin") fail("unit-view request does not send the session cookie");
+    }
+    for (const c of crew.cards) {
+      console.log(`    day ${c.day} ${c.unit} ${c.time}: ${c.with.length ? "with " + c.with.join(", ") : ""}${c.open.length ? " open: " + c.open.join(", ") : ""}${c.note ? " [" + c.note + "]" : ""}${c.spares ? " [See spares]" : ""}`);
+      if (/checking/i.test(c.note)) fail(`day ${c.day}: crew line never resolved`);
+      if (!c.past && c.open.length && !c.spares) fail(`day ${c.day}: open seat without a See spares button`);
+      if (c.past && c.spares) fail(`day ${c.day}: past shift offers spares`);
+      if (c.with.length && !c.open.length && c.spares) fail(`day ${c.day}: has a partner but still offers spares`);
+      if (c.with.some((w) => /eden/i.test(w))) fail(`day ${c.day}: lists the signed-in user as their own partner`);
+    }
+    const matched = crew.cards.filter((c) => c.with.length || c.open.length).length;
+    if (matched === 0) fail("no shift card got crew information");
+    console.log(`  crew: ${matched} of ${crew.cards.length} shifts matched to a unit`);
+
+    // Spares for the first open shift, checked against the BLS page parsed
+    // independently here.
+    const sparesBtn = page.locator(".tsm-spares-btn").first();
+    if (await sparesBtn.count()) {
+      await sparesBtn.scrollIntoViewIfNeeded();
+      await sparesBtn.click();
+      await page.waitForTimeout(200);
+      const panel = await page.evaluate(() => {
+        const btn = document.querySelector(".tsm-spares-btn[aria-expanded='true']");
+        const table = btn.closest("table.tsm-shift");
+        const rows = [...table.querySelectorAll(".tsm-spare")].map((r) => ({
+          name: r.querySelector(".tsm-spare-name").textContent,
+          unit: r.querySelector(".tsm-spare-unit").textContent,
+          time: r.querySelector(".tsm-spare-time").textContent,
+          overlap: r.querySelector(".tsm-spare-overlap").textContent,
+        }));
+        const right = Math.max(...[...table.querySelectorAll("*")].map((e) => e.getBoundingClientRect().right));
+        return {
+          day: Number(table.closest('td[id^="day_"]').id.slice(4)),
+          time: table.querySelector(".tsm-shift-main td.timerange").textContent.trim(),
+          title: table.querySelector(".tsm-spares-title")?.textContent,
+          rows,
+          right: Math.round(right),
+          label: btn.textContent,
+        };
+      });
+      const expected = await (async () => {
+        const p2 = await context.newPage();
+        await p2.goto("file://" + join(fixtures, blsFixture), { waitUntil: "load", timeout: 60_000 });
+        const data = await p2.evaluate((day) => {
+          const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+          const td = document.getElementById(`day_${day}`);
+          return [...td.querySelectorAll("table.eventcontent > tbody > tr")].map((tr) => ({
+            unit: tidy(tr.querySelector("div.location")?.textContent || ""),
+            slots: [...tr.querySelectorAll("table.shifts > tbody > tr")].map((r) => ({ employee: r.classList.contains("employee"), who: tidy(r.querySelector("td")?.textContent || ""), time: tidy(r.querySelector("td.timerange")?.textContent || "") })),
+          }));
+        }, panel.day);
+        await p2.close();
+        const mins = (t) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?/i.exec(t); let h = Number(m[1]); if (m[3]) h = (h % 12) + (m[3].toLowerCase() === "p" ? 12 : 0); return h * 60 + Number(m[2]); };
+        const rng = (t) => { const [a, b] = t.split("-"); const s = mins(a); let e = mins(b); if (e <= s) e += 1440; return [s, e]; };
+        const ov = (a, b) => Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+        const mine = rng(panel.time);
+        const out = [];
+        for (const u of data) for (const x of u.slots) {
+          if (!x.employee || /eden/i.test(x.who)) continue;
+          const r = rng(x.time);
+          if (ov(r, mine) <= 0) continue;
+          if (u.slots.some((y) => y !== x && y.employee && ov(rng(y.time), r) > 0)) continue;
+          out.push(`${x.who}|${x.time}`);
+        }
+        return out;
+      })();
+      const got = panel.rows.map((r) => `${r.name}|${r.time}`);
+      if (panel.label !== "Hide spares") fail(`spares button reads "${panel.label}" while open`);
+      if (panel.right > VIEWPORT.width) fail(`spares panel overflows: right ${panel.right}`);
+      if (got.length !== expected.length || got.some((g) => !expected.includes(g))) fail(`spares for day ${panel.day} ${panel.time}: got ${got.join("; ") || "none"}, expected ${expected.join("; ") || "none"}`);
+      if (panel.rows.some((r) => !r.unit || !r.overlap)) fail("a spare row is missing its unit or overlap");
+      console.log(`  spares on day ${panel.day} (${panel.time}): ${panel.title}; ${panel.rows.map((r) => `${r.name} @ ${r.unit} ${r.time} ${r.overlap}`).join(" ; ") || "none"}`);
+      await page.screenshot({ path: join(outDir, `${name}-after-spares.png`) });
+      await sparesBtn.click();
+      await page.waitForTimeout(100);
+      if (await page.locator(".tsm-shift-spares").count()) fail("Hide spares did not close the panel");
+    } else {
+      console.log("  (no open shift in this fixture, spares panel not exercised)");
+    }
   }
 
   await page.screenshot({ path: join(outDir, `${name}-after-top.png`) });

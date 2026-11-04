@@ -18,6 +18,16 @@ phone widths:
   per day, days without shifts collapsed to a single line, today marked, past
   days muted, each shift a card with unit, time and the detail line. A
   floating "Today" button scrolls to the current day.
+  - **Crew.** Each card also says who is on that unit for your hours ("with
+    Jane Doe") or that the other seat is open ("open seat EMT"). To know
+    that, the add-on loads the site's own BLS view for the month in the
+    background, the same request the View dropdown makes, and the ALS and
+    Details views only for shifts the BLS page does not list (a detail or a
+    paramedic truck). Parsed pages are kept in `sessionStorage` for ten
+    minutes so flipping between views does not reload them.
+  - **See spares.** On an upcoming shift with an open seat, this lists
+    everyone else working overlapping hours that day who has no partner on
+    their own unit: name, unit, hours and how long the two shifts overlap.
 - **Vehicle/Location Month Views** (every unit, e.g. BLS) show one day at a
   time. A sticky pager has a scrollable strip of day chips (with the number of
   requestable open shifts on each day), previous/next buttons, and filters:
@@ -40,9 +50,11 @@ phone widths:
 - **Dialogs.** The site's jQuery UI confirmation dialog is pinned to the
   viewport and sized to the phone.
 
-Nothing is sent anywhere. The add-on has no permissions beyond the Traumasoft
-host pattern, no background script, and no storage except the chosen filter
-in `localStorage`.
+Nothing is sent anywhere but the site itself. The add-on has no permissions
+beyond the Traumasoft host pattern and no background script. Its only
+requests are the unit-view page loads described above, sent with the page's
+own form fields to the same site. Storage is the chosen filter in
+`localStorage` and the ten-minute unit-view cache in `sessionStorage`.
 
 Desktop browsers are untouched: the script only activates when the viewport
 is 820px wide or narrower.
@@ -88,7 +100,9 @@ TSM_FIXTURES=~/Desktop/Schedule npm test
 
 It loads each page in headless Chromium with every non-`file://` request
 blocked, injects the add-on's CSS and script, and checks that the page no
-longer overflows, that the pickup handlers are untouched, that the location
+longer overflows, that the individual view's crew lines come from a correctly
+formed request for the BLS view (answered with the saved BLS page) and its
+spares list matches an independent reading of that page, that the pickup handlers are untouched, that the location
 view shows exactly one day with a chip per day, that the "Open only" and
 person filters hide the right units, that the person calendar's dots agree
 with the day chips and its shift card matches the day's own unit list, and
