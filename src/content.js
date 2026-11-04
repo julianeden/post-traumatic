@@ -6,7 +6,7 @@
 // classes, wraps bare text nodes so CSS can style them, and inserts a day
 // pager for the location (all-units) views. On the individual view it also
 // loads the site's own unit views for the month to show who is on each of
-// your shifts.
+// your shifts. On the login page it remembers the username.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-filter, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -22,6 +22,7 @@
   // Unit views searched, in order, for the crew on each of your shifts.
   const CREW_VIEWS = ["bls", "als", "details"];
   const CREW_CACHE_MS = 10 * 60 * 1000;
+  const LOGIN_KEY = "tsm.login.username";
   const html = document.documentElement;
 
   // Progress notes go to the console (filter on "Traumasoft Mobile").
@@ -56,6 +57,11 @@
   }
 
   function onReady() {
+    if (document.getElementById("loginApp")) {
+      rememberLogin();
+      return;
+    }
+    if (!/main\.php$/.test(location.pathname)) return;
     if (!isPhoneWidth()) {
       diag.log("desktop-sized viewport: not activating");
       return;
@@ -121,6 +127,77 @@
       loadCrew(days).catch((e) => diag.log(`crew: ${e && e.message ? e.message : e}`));
     }
     diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
+  }
+
+  // ---- login page: remember the username ---------------------------------
+
+  // The login form is rendered by the site's Vue app after load. Fill the
+  // username from the last login, keep it updated, and tag the fields so the
+  // browser's own password manager recognises them.
+  function rememberLogin() {
+    const started = Date.now();
+    const hook = () => {
+      const user = document.querySelector('[data-testid="login-identifier"] input');
+      if (user && !user.dataset.tsmHooked) hookUsername(user);
+      const pass = document.querySelector('[data-testid="login-password"] input');
+      if (pass && !pass.dataset.tsmHooked) {
+        pass.dataset.tsmHooked = "1";
+        pass.setAttribute("autocomplete", "current-password");
+        if (!pass.name) pass.name = "password";
+      }
+    };
+    hook();
+    const observer = new MutationObserver(() => {
+      hook();
+      if (Date.now() - started > 10 * 60 * 1000) observer.disconnect();
+    });
+    observer.observe(html, { childList: true, subtree: true });
+    document.addEventListener("click", (e) => {
+      if (e.target.closest?.('[data-testid="login-submit"]')) saveUsername();
+    }, true);
+    diag.log("login page: watching for the form");
+  }
+
+  function hookUsername(input) {
+    input.dataset.tsmHooked = "1";
+    input.setAttribute("autocomplete", "username");
+    if (!input.name) input.name = "username";
+    const saved = savedUsername();
+    if (saved && !input.value) {
+      setInputValue(input, saved);
+      diag.log("login: username filled in");
+    }
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") saveUsername();
+    });
+  }
+
+  function saveUsername() {
+    const input = document.querySelector('[data-testid="login-identifier"] input');
+    const value = (input?.value || "").trim();
+    if (!value) return;
+    try {
+      localStorage.setItem(LOGIN_KEY, value);
+    } catch {
+      // storage unavailable; nothing to remember with
+    }
+  }
+
+  function savedUsername() {
+    try {
+      return localStorage.getItem(LOGIN_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  // Sets a value so that the page's own framework sees it as typed.
+  function setInputValue(input, value) {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (setter) setter.call(input, value);
+    else input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   // ---- page chrome -------------------------------------------------------

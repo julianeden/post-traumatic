@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Traumasoft Mobile Schedule",
-  "version": "1.2.0",
-  "description": "Restyles the Traumasoft employee schedule calendar for phones: a day-by-day agenda for your own shifts and a one-day-at-a-time pager with open-shift filtering and a per-person month calendar for the location views.",
+  "version": "1.3.0",
+  "description": "Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.",
   "icons": {
     "48": "icons/icon-48.png",
     "96": "icons/icon-96.png",
@@ -11,7 +11,7 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*.traumasoft.com/main.php*"
+        "*://*.traumasoft.com/*"
       ],
       "css": [
         "content.css"

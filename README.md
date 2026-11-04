@@ -8,6 +8,16 @@ there.
 
 ## What it does
 
+On the login page, at any width:
+
+- **Remembered username.** The site's login form is a Vue app with no
+  `name` or `autocomplete` on its fields and the password on a later step,
+  so Firefox never offers to remember it. The add-on stores the username
+  you submit in the site's `localStorage` and fills it in next time, and
+  tags the username and password fields (`autocomplete="username"` /
+  `"current-password"`) so Firefox's own password manager can recognise the
+  form. The password is never stored.
+
 On `main.php?a=user:schedule` (and the `view=schedule` calendar views) at
 phone widths:
 
@@ -53,11 +63,12 @@ phone widths:
 Nothing is sent anywhere but the site itself. The add-on has no permissions
 beyond the Traumasoft host pattern and no background script. Its only
 requests are the unit-view page loads described above, sent with the page's
-own form fields to the same site. Storage is the chosen filter in
-`localStorage` and the ten-minute unit-view cache in `sessionStorage`.
+own form fields to the same site. Storage is the chosen filter and the login
+username in `localStorage` and the ten-minute unit-view cache in
+`sessionStorage`.
 
-Desktop browsers are untouched: the script only activates when the viewport
-is 820px wide or narrower.
+Desktop browsers are untouched by the restyling: it only activates when the
+viewport is 820px wide or narrower. The username memory works at any width.
 
 ## Diagnostics
 
@@ -72,7 +83,8 @@ desktop Firefox (`about:debugging`, USB).
 src/
   manifest.json   Manifest V3, Firefox 142+
   content.css     all styling, scoped to html[data-tsm="on"]
-  content.js      adds classes, wraps the day numbers, builds the pager and calendar
+  content.js      adds classes, wraps the day numbers, builds the pager and calendar,
+                  remembers the login username
   icons/
 test/render.mjs   renders saved pages at phone width and checks the result
 ```
@@ -92,15 +104,18 @@ committed. In desktop Firefox, open the schedule view you want, press Cmd+S,
 choose "Web Page, complete", and save into `test/fixtures/` (gitignored), or
 anywhere and point `TSM_FIXTURES` at the folder. Save one file per view you
 care about, e.g. the Individual Month View and the BLS Vehicle/Location view.
+Save the login page too, as a file called `login` (no extension), to exercise
+the username memory.
 
 ```sh
 npm test
 TSM_FIXTURES=~/Desktop/Schedule npm test
 ```
 
-It loads each page in headless Chromium with every non-`file://` request
-blocked, injects the add-on's CSS and script, and checks that the page no
-longer overflows, that the individual view's crew lines come from a correctly
+It serves each page in headless Chromium at a made-up origin under the
+site's real paths, with the saved asset folders answered from disk and every
+other request blocked, injects the add-on's CSS and script, and checks that
+the page no longer overflows, that the individual view's crew lines come from a correctly
 formed request for the BLS view (answered with the saved BLS page) and its
 spares list matches an independent reading of that page, that the pickup handlers are untouched, that the location
 view shows exactly one day with a chip per day, that the "Open only" and

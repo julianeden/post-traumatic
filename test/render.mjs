@@ -3,10 +3,11 @@
 //
 // Fixtures are "Web Page, complete" saves of the live site and contain real
 // names, so they live outside the repo. Point TSM_FIXTURES at the folder
-// (default: test/fixtures). Every request that is not file:// is blocked, so
-// nothing reaches the real site.
+// (default: test/fixtures). The pages are served at a made-up https origin
+// under the site's real paths, their saved asset folders are answered from
+// disk, and every other request is blocked, so nothing reaches the real site.
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
@@ -29,6 +30,32 @@ if (pages.length === 0) {
   process.exit(0);
 }
 
+const ORIGIN = "https://traumasoft.invalid";
+const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".png": "image/png", ".gif": "image/gif", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".woff": "font/woff", ".woff2": "font/woff2", ".ico": "image/x-icon" };
+
+// Routes a context: fixture pages at /main.php?fixture=<file> and
+// /login.php, saved "<name>_files" folders from disk, everything else blocked.
+async function serveFixtures(context, blocked) {
+  await context.route(() => true, (route) => {
+    const url = new URL(route.request().url());
+    if (url.protocol === "file:") return route.continue();
+    if (url.origin === ORIGIN) {
+      let file = null;
+      if (url.pathname === "/main.php" && url.searchParams.get("fixture")) file = url.searchParams.get("fixture");
+      else if (url.pathname === "/login.php") file = "login";
+      else if (/^\/[^/]+_files\//.test(url.pathname)) file = decodeURIComponent(url.pathname.slice(1));
+      const path = file && join(fixtures, file);
+      if (path && path.startsWith(fixtures) && existsSync(path)) {
+        const type = basename(path) === "login" ? "text/html" : TYPES[extname(path).toLowerCase()] || "application/octet-stream";
+        return route.fulfill({ status: 200, contentType: type, body: readFileSync(path) });
+      }
+    } else {
+      blocked?.add(url.host);
+    }
+    return route.abort();
+  });
+}
+
 const browser = await chromium.launch({ headless: true });
 let failures = 0;
 
@@ -37,24 +64,93 @@ function fail(msg) {
   console.error(`  FAIL ${msg}`);
 }
 
+// The login page, saved as a file called "login" (no extension) in the
+// fixtures folder, is served at a made-up https origin so localStorage works
+// the way it does on the site. Its assets are not needed and are blocked.
+const loginFixture = join(fixtures, "login");
+if (existsSync(loginFixture)) {
+  console.log("login");
+  const origin = ORIGIN;
+  const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await serveFixtures(context);
+  const page = await context.newPage();
+  page.on("console", (msg) => {
+    const text = msg.text();
+    if (text.includes("[Traumasoft Mobile]")) console.log(`  console: ${text.replace("[Traumasoft Mobile] ", "")}`);
+  });
+  const inject = async () => {
+    await page.addStyleTag({ path: cssPath });
+    await page.addScriptTag({ path: jsPath });
+    await page.waitForTimeout(300);
+  };
+  const USER = "input.v-text-field[data-testid='login-identifier'] input, [data-testid='login-identifier'] input";
+
+  // First visit: nothing remembered; typing and pressing Continue stores it.
+  await page.goto(`${origin}/login.php`, { waitUntil: "load", timeout: 60_000 });
+  await inject();
+  const fresh = await page.evaluate((sel) => {
+    const i = document.querySelector(sel);
+    return { found: Boolean(i), value: i?.value, autocomplete: i?.getAttribute("autocomplete"), name: i?.name, stored: localStorage.getItem("tsm.login.username") };
+  }, USER);
+  if (!fresh.found) fail("login: username field not found");
+  if (fresh.value) fail(`login: field prefilled on first visit with "${fresh.value}"`);
+  if (fresh.autocomplete !== "username") fail(`login: username field autocomplete is "${fresh.autocomplete}"`);
+  await page.locator(USER).fill("jeden");
+  await page.locator("[data-testid='login-submit']").click();
+  await page.waitForTimeout(100);
+  const stored = await page.evaluate(() => localStorage.getItem("tsm.login.username"));
+  if (stored !== "jeden") fail(`login: Continue did not store the username (stored "${stored}")`);
+  await page.screenshot({ path: join(outDir, "login-after-first.png") });
+
+  // Second visit: the field is filled before anyone types, and the page's
+  // own input handler hears about it.
+  await page.goto(`${origin}/login.php`, { waitUntil: "load", timeout: 60_000 });
+  await page.evaluate((sel) => {
+    window.__tsmInputEvents = 0;
+    document.querySelector(sel).addEventListener("input", () => { window.__tsmInputEvents += 1; });
+    // Without the site's script, Enter would submit the bare form natively.
+    document.querySelector("form")?.addEventListener("submit", (e) => e.preventDefault());
+  }, USER);
+  await inject();
+  const again = await page.evaluate((sel) => ({ value: document.querySelector(sel).value, events: window.__tsmInputEvents }), USER);
+  if (again.value !== "jeden") fail(`login: username not filled on return (value "${again.value}")`);
+  if (!again.events) fail("login: filled value was not announced with an input event");
+  // Enter in the field updates the memory; a password field rendered later is tagged.
+  await page.locator(USER).fill("jeden2");
+  await page.locator(USER).press("Enter");
+  await page.evaluate(() => {
+    const box = document.createElement("div");
+    box.setAttribute("data-testid", "login-password");
+    const pw = document.createElement("input");
+    pw.type = "password";
+    box.append(pw);
+    document.getElementById("loginApp").append(box);
+  });
+  await page.waitForTimeout(100);
+  const later = await page.evaluate(() => ({
+    stored: localStorage.getItem("tsm.login.username"),
+    pw: document.querySelector("[data-testid='login-password'] input")?.getAttribute("autocomplete"),
+  }));
+  if (later.stored !== "jeden2") fail(`login: Enter did not update the stored username (stored "${later.stored}")`);
+  if (later.pw !== "current-password") fail(`login: password field autocomplete is "${later.pw}"`);
+  console.log(`  login: stored on Continue and Enter, refilled on return (${again.events} input event), fields tagged for the password manager`);
+  await page.screenshot({ path: join(outDir, "login-after-return.png") });
+  await context.close();
+}
+
 for (const file of pages) {
   const name = file.replace(/\.html?$/i, "");
   console.log(`${file}`);
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const blocked = new Set();
-  await context.route(() => true, (route) => {
-    const url = route.request().url();
-    if (url.startsWith("file://")) return route.continue();
-    blocked.add(new URL(url).host);
-    return route.abort();
-  });
+  await serveFixtures(context, blocked);
   const page = await context.newPage();
   page.on("dialog", (d) => d.dismiss());
   page.on("console", (msg) => {
     const text = msg.text();
     if (text.includes("[Traumasoft Mobile]")) console.log(`  console: ${text.replace("[Traumasoft Mobile] ", "")}`);
   });
-  await page.goto("file://" + join(fixtures, file), { waitUntil: "load", timeout: 60_000 });
+  await page.goto(`${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}`, { waitUntil: "load", timeout: 60_000 });
 
   const before = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -85,9 +181,11 @@ for (const file of pages) {
 
   const after = await page.evaluate(() => {
     const html = document.documentElement;
+    // Anything inside a fixed element (the site's header) cannot scroll the page.
+    const inFixed = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === "fixed") return true; return false; };
     const wide = [...document.querySelectorAll("body *")].filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(el).position !== "fixed";
+      return r.width > 0 && r.right > innerWidth + 1 && !inFixed(el);
     });
     return {
       active: html.dataset.tsmReady === "1",
@@ -332,9 +430,10 @@ for (const file of pages) {
           const b = chip.querySelector(".tsm-chip-name");
           return b.hidden ? 0 : Number(b.textContent);
         });
+        const inFixed = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === "fixed") return true; return false; };
         const wide = [...document.querySelectorAll("body *")].filter((el) => {
           const r = el.getBoundingClientRect();
-          return r.width > 0 && r.right > innerWidth + 1 && getComputedStyle(el).position !== "fixed";
+          return r.width > 0 && r.right > innerWidth + 1 && !inFixed(el);
         });
         return {
           on: html.dataset.tsmCal === "on",
