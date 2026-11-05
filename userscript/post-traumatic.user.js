@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Post-Traumatic
 // @namespace    https://github.com/julianeden/post-traumatic
-// @version      1.4.0
+// @version      1.4.1
 // @description  Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.
 // @author       Julian Eden
 // @match        *://*.traumasoft.com/*

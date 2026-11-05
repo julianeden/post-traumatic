@@ -1,6 +1,6 @@
 {
   "name": "post-traumatic",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Firefox add-on that restyles the Traumasoft schedule calendar for phones.",
   "scripts": {
