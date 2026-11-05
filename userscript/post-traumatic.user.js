@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         Traumasoft Mobile Schedule
-// @namespace    https://github.com/julianeden/traumasoft-mobile
+// @name         Post-Traumatic
+// @namespace    https://github.com/julianeden/post-traumatic
 // @version      1.4.0
 // @description  Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.
 // @author       Julian Eden
@@ -9,15 +9,15 @@
 // @inject-into  content
 // @noframes
 // @grant        none
-// @updateURL    https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js
-// @downloadURL  https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js
+// @updateURL    https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js
+// @downloadURL  https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js
 // @license      MIT
 // ==/UserScript==
 
 // Firefox injects content.css for the add-on; here the script adds it to the
 // page as early as possible, before the document has a <head>.
 (() => {
-  const css = `/* Traumasoft Mobile Schedule.
+  const css = `/* Post-Traumatic.
    Every rule is scoped to html[data-tsm="on"], which content.js adds only on the
    schedule calendar page at phone widths. html[data-tsm-mode="agenda"] is the
    "Individual Month View"; html[data-tsm-mode="location"] is a "Vehicle/Location" view. */
@@ -2165,8 +2165,8 @@ html[data-tsm="on"] .tsm-confirm-yes {
   const EARLY_LIMIT_MS = 7 * 60 * 1000;
   const html = document.documentElement;
 
-  // Progress notes go to the console (filter on "Traumasoft Mobile").
-  const diag = { log: (line) => console.debug("[Traumasoft Mobile]", line) };
+  // Progress notes go to the console (filter on "Post-Traumatic").
+  const diag = { log: (line) => console.debug("[Post-Traumatic]", line) };
   diag.log(`script running on ${location.host}${location.pathname}${location.search.slice(0, 70)} (${document.readyState})`);
 
   try {

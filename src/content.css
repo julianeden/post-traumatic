@@ -1,4 +1,4 @@
-/* Traumasoft Mobile Schedule.
+/* Post-Traumatic.
    Every rule is scoped to html[data-tsm="on"], which content.js adds only on the
    schedule calendar page at phone widths. html[data-tsm-mode="agenda"] is the
    "Individual Month View"; html[data-tsm-mode="location"] is a "Vehicle/Location" view. */

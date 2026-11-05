@@ -47,8 +47,8 @@
   const EARLY_LIMIT_MS = 7 * 60 * 1000;
   const html = document.documentElement;
 
-  // Progress notes go to the console (filter on "Traumasoft Mobile").
-  const diag = { log: (line) => console.debug("[Traumasoft Mobile]", line) };
+  // Progress notes go to the console (filter on "Post-Traumatic").
+  const diag = { log: (line) => console.debug("[Post-Traumatic]", line) };
   diag.log(`script running on ${location.host}${location.pathname}${location.search.slice(0, 70)} (${document.readyState})`);
 
   try {

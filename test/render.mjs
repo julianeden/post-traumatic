@@ -21,7 +21,7 @@ const cssPath = join(root, "src", "content.css");
 const jsPath = join(root, "src", "content.js");
 // TSM_USERSCRIPT=1 injects only the bundled userscript (which carries the
 // stylesheet itself); TSM_BROWSER=webkit runs in Safari's engine.
-const userscript = process.env.TSM_USERSCRIPT === "1" ? join(root, "userscript", "traumasoft-mobile.user.js") : null;
+const userscript = process.env.TSM_USERSCRIPT === "1" ? join(root, "userscript", "post-traumatic.user.js") : null;
 const engine = process.env.TSM_BROWSER === "webkit" ? webkit : chromium;
 async function inject(page) {
   if (userscript) {
@@ -311,7 +311,7 @@ if (existsSync(loginFixture)) {
   const page = await context.newPage();
   page.on("console", (msg) => {
     const text = msg.text();
-    if (text.includes("[Traumasoft Mobile]")) console.log(`  console: ${text.replace("[Traumasoft Mobile] ", "")}`);
+    if (text.includes("[Post-Traumatic]")) console.log(`  console: ${text.replace("[Post-Traumatic] ", "")}`);
   });
   const injectLogin = async () => {
     await inject(page);
@@ -388,7 +388,7 @@ for (const file of pages) {
   page.on("dialog", (d) => d.dismiss());
   page.on("console", (msg) => {
     const text = msg.text();
-    if (text.includes("[Traumasoft Mobile]")) console.log(`  console: ${text.replace("[Traumasoft Mobile] ", "")}`);
+    if (text.includes("[Post-Traumatic]")) console.log(`  console: ${text.replace("[Post-Traumatic] ", "")}`);
   });
   await page.goto(`${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}`, { waitUntil: "load", timeout: 60_000 });
 

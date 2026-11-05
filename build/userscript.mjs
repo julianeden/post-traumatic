@@ -9,11 +9,11 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(readFileSync(join(root, "src", "manifest.json"), "utf8"));
 const css = readFileSync(join(root, "src", "content.css"), "utf8");
 const js = readFileSync(join(root, "src", "content.js"), "utf8");
-const RAW = "https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js";
+const RAW = "https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js";
 
 const header = `// ==UserScript==
 // @name         ${manifest.name}
-// @namespace    https://github.com/julianeden/traumasoft-mobile
+// @namespace    https://github.com/julianeden/post-traumatic
 // @version      ${manifest.version}
 // @description  ${manifest.description}
 // @author       Julian Eden
@@ -45,6 +45,6 @@ const bundle = `${header}
 ${js}`;
 
 mkdirSync(join(root, "userscript"), { recursive: true });
-const out = join(root, "userscript", "traumasoft-mobile.user.js");
+const out = join(root, "userscript", "post-traumatic.user.js");
 writeFileSync(out, bundle);
 console.log(`wrote ${out} (${bundle.length} bytes, version ${manifest.version})`);

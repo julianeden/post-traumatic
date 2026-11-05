@@ -1,10 +1,10 @@
-# Traumasoft Mobile Schedule
+# Post-Traumatic
 
-A Firefox add-on that makes the Traumasoft employee schedule page usable on a
-phone. The page serves a fixed-width desktop month grid to every device; on a
-phone it runs off the right edge and the text becomes unreadable. The add-on
-leaves the page's own scripts and links alone and restyles what is already
-there.
+Traumasoft, after treatment. A Firefox add-on that makes the Traumasoft
+employee schedule page usable on a phone. The page serves a fixed-width
+desktop month grid to every device; on a phone it runs off the right edge and
+the text becomes unreadable. The add-on leaves the page's own scripts and
+links alone and restyles what is already there.
 
 ## What it does
 
@@ -131,7 +131,7 @@ viewport is 820px wide or narrower. The username memory works at any width.
 
 The script logs what it decided (URL seen, viewport check, whether the
 calendar was found, chosen mode, errors) with `console.debug` under the
-prefix "Traumasoft Mobile". On a phone, read them with remote debugging from
+prefix "Post-Traumatic". On a phone, read them with remote debugging from
 desktop Firefox (`about:debugging`, USB).
 
 ## Layout
@@ -151,7 +151,7 @@ test/render.mjs   renders saved pages at phone width and checks the result
 ```sh
 npm install
 npm run lint
-npm run build      # dist/traumasoft_mobile_schedule-<version>.zip and userscript/traumasoft-mobile.user.js
+npm run build      # dist/post-traumatic-<version>.zip and userscript/post-traumatic.user.js
 ```
 
 ## Test
@@ -192,7 +192,7 @@ land in `test/out/`.
 ## iPhone: the userscript build
 
 Firefox on iOS cannot run add-ons, so the same code also ships as a single
-userscript, `userscript/traumasoft-mobile.user.js`, built by
+userscript, `userscript/post-traumatic.user.js`, built by
 `npm run build:userscript` from `src/content.css` and `src/content.js`
 (the script injects the stylesheet itself). It is committed, and published as a public gist (updated with `gh gist edit` on each release) so the raw
 GitHub URL in its `@updateURL` stays stable.
@@ -203,7 +203,7 @@ To install on an iPhone:
 2. Settings → Safari → Extensions → Userscripts: turn it on and allow it on
    `traumasoft.com` (or all websites).
 3. In Safari, open the script's raw URL
-   (`https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js`),
+   (`https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js`),
    tap the Userscripts icon in the address bar, and tap Install.
 4. Open the Traumasoft site; the restyle is on.
 
