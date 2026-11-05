@@ -2,6 +2,8 @@
 
 A mod to make Traumasoft mobile-friendly. Works with Safari on iPhone or Firefox on Android. Post-Traumatic puts the most-used options directly in the top bar and restructures the schedule, work order, checklist, and punch clock pages for dramatically increased usability. It also lets the log-in page remember your username after the first time it's typed. The rest of the site is unchanged.
 
+Talk to Julian Eden on Blink if you encounter any issues.
+
 ## iPhone (Safari)
 
 1. Install the free **Userscripts** app from the App Store and open it once so it sets itself up. You can close it right after.
@@ -14,7 +16,7 @@ To update later, repeat step 3.
 ## Android (Firefox)
 
 1. In Firefox, open https://addons.mozilla.org/firefox/addon/post-traumatic/
-2. Tap **Add to Firefox**, then **Add**. Updates are automatic.
+2. Tap **Add to Firefox**, then **Add**.
 3. (*Optional, for faster access*) To create an icon that directly opens the page, open the schedule in Firefox. Tap the 3-dots in the top right corner. Tap More. Tap `Add to Home Screen`.
 
-Talk to Julian Eden on Blink if you encounter any issues.
+Updates are automatic.
