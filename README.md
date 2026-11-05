@@ -20,11 +20,34 @@ On the login page, at any width:
 
 On every `main.php` page at phone widths:
 
-- **Punch button in the header.** A "Punch" link to the punch clock page
-  (`main.php?a=user:punchin`) sits beside the signed-in name in the site's
-  header, and the Traumasoft Chat button is hidden. The header is rendered
-  by the site's Vue app after load and can re-render, so the link is
-  re-inserted whenever it goes missing.
+- **Top bar.** Beside the site's hamburger: a calendar (the schedule,
+  `main.php?a=user:schedule`), a wrench menu with the five Maintenance Forms
+  from the Company Links page (Equipment, Fleet, IT, Property, PCR Tech
+  Issues; the two Smartsheet ones open in a new tab), a checklist menu with
+  the BLS and ALS checklists, and a clock (the punch clock), spread evenly
+  across the bar. The logo, search box, settings, chat, portal, name block
+  and bell are hidden; the hamburger's own list gets an "Alerts" entry
+  after Punch Clock that opens the notifications panel the bell controlled
+  (the bell stays in the page as an invisible activator for it). The header is rendered by the
+  site's Vue app after load and can re-render, so the bar is re-inserted
+  whenever it goes missing.
+
+On the formbuilder pages (work orders, checklists, any
+`formbuilder:display_form`) and the Fleet maintenance request at phone
+widths:
+
+- **Stacked forms.** The floated, fixed-width item boxes become a single
+  column with labels above full-width, finger-sized controls; each radio or
+  checkbox and its text are wrapped in a `<label>` so the text is tappable
+  and an option never wraps mid-word. The coloured emphasis boxes keep their
+  colours. The print copy of the form is hidden.
+- **Odometer.** The checklists' odometer field is validated by class rules
+  the site re-applies on load and on every shift change
+  (`validate[required,custom[integer],min[..],max[..]]`). The add-on drops
+  the `max[..]` rule and the `max` attribute and changes `custom[integer]`
+  to `custom[number]`, each time the site sets them, so any reading at or
+  above the last one is accepted, with or without decimals, and the phone
+  shows a decimal keyboard.
 
 On the punch clock page (`main.php?a=user:punchin`) at phone widths:
 
@@ -50,9 +73,14 @@ On the punch clock page (`main.php?a=user:punchin`) at phone widths:
 On `main.php?a=user:schedule` (and the `view=schedule` calendar views) at
 phone widths:
 
-- **Page chrome.** The nested layout tables become a single column, the
-  "Shift Substitutions / Trades / Time-Off / Pickup" links become tappable
-  rows, and the View / month / year controls become full-width selects.
+- **Two tabs.** A Schedule / More Options switch at the top. Schedule, the
+  default, holds the view pickers, legend, month and year and the calendar.
+  More Options holds everything the page used to stack above them: the
+  status and PTO figures, Availability, Shift Substitutions, Trades,
+  Time-Off and Pickup Shifts, as tappable rows. Nothing moves in the DOM;
+  the sections are tagged and one group is hidden at a time.
+- **Page chrome.** The nested layout tables become a single column and the
+  View / month / year controls become full-width selects.
 - **Individual Month View** (your shifts) becomes a vertical agenda: one row
   per day, days without shifts collapsed to a single line, today marked, past
   days muted, each shift a card with unit, time and the detail line. A
@@ -155,7 +183,10 @@ with the day chips and its shift card matches the day's own unit list, that
 the confirmation dialog fits the viewport, and that the punch clock page
 shows one button, does not scroll, asks before early punches (the fixture's
 server clock is moved and a punched-in state synthesised for the variants)
-and hands non-early punches to the site's handler. Screenshots of every state
+and hands non-early punches to the site's handler, that the top bar has its
+four buttons with working menus and the rest of the header hidden, and that
+the form pages fit the phone with full-width controls and an odometer field
+that keeps no upper limit even after a shift change. Screenshots of every state
 land in `test/out/`.
 
 ## Distribution

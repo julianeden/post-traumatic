@@ -26,6 +26,22 @@
   const CREW_CACHE_MS = 10 * 60 * 1000;
   const LOGIN_KEY = "tsm.login.username";
   const PUNCH_URL = "/main.php?a=user:punchin";
+  const SCHEDULE_URL = "/main.php?a=user:schedule";
+  const FORM_URL = "/main.php?a=formbuilder:display_form&form_id=";
+  // The header's wrench and checklist menus, as listed on the Company Links page.
+  const WORK_ORDERS = [
+    ["Work Order: Equipment", FORM_URL + "74"],
+    ["Work Order: Fleet", "/main.php?a=user:vehicle_maintenance_request"],
+    ["Work Order: IT", "https://app.smartsheet.com/b/form/01a0a59e3d387053b63871c0457efc3d"],
+    ["Work Order: Property", FORM_URL + "16"],
+    ["PCR Tech Issues", "https://app.smartsheet.com/b/form/01a0a59e3d387053b63871c0457efc3d"],
+  ];
+  const CHECKLISTS = [
+    ["BLS Checklist", FORM_URL + "125"],
+    ["ALS Checklist", FORM_URL + "112"],
+  ];
+  // Close functions of the header menus, so opening one closes the rest.
+  const openMenuClosers = [];
   // Company policy: punches up to this long before the shift boundary need
   // no explanation; earlier ones make the site demand a reason.
   const EARLY_LIMIT_MS = 7 * 60 * 1000;
@@ -73,47 +89,49 @@
       return;
     }
     html.dataset.tsmChrome = "on";
-    addPunchClockLink();
-    if (document.getElementById("punchin_form")) {
-      try {
-        initPunchPage();
-      } catch (e) {
-        diag.log(`error on punch page: ${e && e.message ? e.message : e}`);
-      }
-      return;
-    }
-    diag.log(`DOM ready · #view_select ${document.getElementById("view_select") ? "yes" : "no"} · table.month ${document.querySelector("table.month") ? "yes" : "no"}`);
-    if (isSchedulePageDom()) {
-      safeInit();
-      return;
-    }
-    // Some pages fill their content after load; keep looking for a while.
+    buildTopBar();
+    // Some pages build their content after load (the Fleet request form is
+    // injected once its field config arrives), so keep looking for a while.
+    if (startPage()) return;
     const started = Date.now();
     const observer = new MutationObserver(() => {
-      if (isSchedulePageDom()) {
+      if (startPage()) {
         observer.disconnect();
-        diag.log(`calendar appeared after ${Date.now() - started} ms`);
-        safeInit();
+        diag.log(`page content appeared after ${Date.now() - started} ms`);
       } else if (Date.now() - started > CALENDAR_WAIT_MS) {
         observer.disconnect();
-        diag.log("no schedule calendar on this page");
+        diag.log("nothing to restyle on this page");
       }
     });
     observer.observe(html, { childList: true, subtree: true });
     setTimeout(() => {
       if (!html.dataset.tsmReady) {
         observer.disconnect();
-        diag.log("no schedule calendar on this page");
+        diag.log("nothing to restyle on this page");
       }
     }, CALENDAR_WAIT_MS);
   }
 
-  function safeInit() {
-    try {
-      init();
-    } catch (e) {
-      diag.log(`error in init: ${e && e.message ? e.message : e}`);
+  // Starts the restyle for whichever page this is; false if none matches yet.
+  function startPage() {
+    if (html.dataset.tsmReady) return true;
+    const pages = [
+      [() => document.getElementById("punchin_form"), initPunchPage, "punch page"],
+      [() => document.getElementById("formID"), initFormPage, "form page"],
+      [() => document.getElementById("vehicle_maintenance_request_dialog_form"), initFleetPage, "fleet form"],
+      [isSchedulePageDom, init, "schedule"],
+    ];
+    for (const [test, start, label] of pages) {
+      if (!test()) continue;
+      try {
+        start();
+      } catch (e) {
+        diag.log(`error on ${label}: ${e && e.message ? e.message : e}`);
+        html.dataset.tsmReady = "1";
+      }
+      return true;
     }
+    return false;
   }
 
   function init() {
@@ -126,6 +144,7 @@
     const isLocation = Boolean(month.querySelector("div.location"));
 
     decorateToolbar();
+    buildTabs();
     decorateDays(month, days, isLocation);
 
     if (isLocation) {
@@ -145,50 +164,247 @@
     diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
   }
 
-  // ---- header: punch clock link --------------------------------------------
+  // ---- header: the top bar --------------------------------------------------
 
-  // The site's Vue header renders after load and may re-render; keep a link
-  // to the punch clock beside the signed-in name. The chat button it
-  // replaces is hidden by the stylesheet.
-  function addPunchClockLink() {
+  // The site's Vue header renders after load and may re-render. Beside its
+  // hamburger it gets: calendar (schedule), wrench (work orders), checklist
+  // (BLS/ALS) and clock (punch). The stylesheet hides the logo, search,
+  // settings, chat, portal, name and bell; the bell is reached from an
+  // "Alerts" entry added to the hamburger's list.
+  function buildTopBar() {
+    let nav = null;
     const place = () => {
-      const right = document.getElementById("ts_menus_right_div");
-      if (!right || document.getElementById("tsm-punchlink")) return;
-      const link = document.createElement("a");
-      link.id = "tsm-punchlink";
-      link.className = "tsm-punchlink";
-      link.href = PUNCH_URL;
-      link.title = "Punch Clock";
-      link.setAttribute("aria-label", "Punch Clock");
-      link.append(clockIcon(), el("span", "tsm-punchlink-text", "Punch"));
-      const user = document.getElementById("ts_menus_user_div");
-      if (user && user.parentNode === right) user.before(link);
-      else right.append(link);
+      const col = document.querySelector("#ts_menus_menu_div > .v-col");
+      if (!col) return;
+      if (!nav) nav = makeTopNav();
+      const burger = col.querySelector('button[title="All Menus"]');
+      if (burger) {
+        if (burger.nextElementSibling !== nav) burger.after(nav);
+      } else if (col.firstElementChild !== nav) {
+        col.prepend(nav);
+      }
+      addAlertsItem(burger);
     };
     place();
     new MutationObserver(place).observe(html, { childList: true, subtree: true });
   }
 
-  function clockIcon() {
+  // The hamburger's list is rendered into an overlay each time it opens;
+  // give it an Alerts entry after Punch Clock that opens the notifications
+  // panel the hidden bell button controls.
+  function addAlertsItem(burger) {
+    const bell = document.getElementById("notifications_button");
+    const listId = burger?.getAttribute("aria-controls");
+    const list = listId && document.getElementById(listId)?.querySelector(".v-list");
+    if (!bell || !list || list.querySelector("#tsm-alerts-item")) return;
+    const links = [...list.querySelectorAll("a.ts_menu_list_item[href]")].filter((a) => !/logout/i.test(a.href));
+    const model = list.querySelector('a.ts_menu_list_item[href*="user:punchin"]')
+      || list.querySelector('a.ts_menu_list_item[href*="user:account"]')
+      || links[links.length - 1];
+    if (!model) return;
+    const wrap = model.parentElement.cloneNode(false);
+    const item = model.cloneNode(false);
+    item.id = "tsm-alerts-item";
+    item.href = "#";
+    item.removeAttribute("aria-selected");
+    item.append(el("span", "v-list-item__overlay"), el("span", "v-list-item__underlay"));
+    const content = el("div", "v-list-item__content");
+    const title = el("div", "v-list-item-title ts_menu_list_item_title");
+    const glyph = model.querySelector("i.v-icon")?.cloneNode(false) || el("i", "mdi v-icon");
+    glyph.className = glyph.className.replace(/mdi-[\w-]+/, "mdi-bell");
+    title.append(glyph, " Alerts");
+    content.append(title);
+    item.append(content);
+    wrap.append(item);
+    model.parentElement.after(wrap);
+    item.addEventListener("click", (e) => {
+      e.preventDefault();
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      setTimeout(() => bell.click(), 60);
+    });
+  }
+
+  function makeTopNav() {
+    const nav = el("nav", "tsm-topnav");
+    nav.id = "tsm-topnav";
+    nav.setAttribute("aria-label", "Quick links");
+    nav.append(
+      navLink("Schedule", SCHEDULE_URL, icon("calendar")),
+      navMenu("Work orders", icon("wrench"), WORK_ORDERS),
+      navMenu("Checklists", icon("checklist"), CHECKLISTS),
+      navLink("Punch Clock", PUNCH_URL, icon("clock")),
+    );
+    return nav;
+  }
+
+  function navLink(label, href, svg) {
+    const a = document.createElement("a");
+    a.className = "tsm-topbtn";
+    a.href = href;
+    a.title = label;
+    a.setAttribute("aria-label", label);
+    a.append(svg);
+    return a;
+  }
+
+  // A button that opens a small list of links under the header.
+  function navMenu(label, svg, items) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tsm-topbtn tsm-topbtn-menu";
+    btn.title = label;
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("aria-haspopup", "menu");
+    btn.setAttribute("aria-expanded", "false");
+    btn.append(svg, icon("chevron"));
+    const panel = el("div", "tsm-menu");
+    panel.setAttribute("role", "menu");
+    panel.hidden = true;
+    for (const [text, href] of items) {
+      const a = document.createElement("a");
+      a.className = "tsm-menu-item";
+      a.setAttribute("role", "menuitem");
+      a.href = href;
+      a.textContent = text;
+      if (/^https?:/.test(href) && !href.includes(location.host)) a.target = "_blank";
+      panel.append(a);
+    }
+    const close = () => {
+      panel.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      btn.classList.remove("tsm-topbtn-open");
+    };
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const open = panel.hidden;
+      closeMenus();
+      if (!open) return;
+      if (!panel.isConnected) document.body.append(panel);
+      const r = btn.getBoundingClientRect();
+      panel.hidden = false;
+      panel.style.top = `${Math.round(r.bottom + 6)}px`;
+      panel.style.left = `${Math.max(8, Math.min(Math.round(r.left), innerWidth - panel.offsetWidth - 8))}px`;
+      btn.setAttribute("aria-expanded", "true");
+      btn.classList.add("tsm-topbtn-open");
+    });
+    openMenuClosers.push(close);
+    return btn;
+  }
+
+  function closeMenus() {
+    for (const close of openMenuClosers) close();
+  }
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest?.(".tsm-menu")) closeMenus();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenus();
+  });
+
+  // Simple line icons; stroke follows the text colour.
+  function icon(name) {
+    const paths = {
+      calendar: ["M4 6h16v14H4z", "M4 10h16", "M8 3v4", "M16 3v4"],
+      wrench: ["M14.5 5.5a4 4 0 0 0-5.3 5.3L4 16v4h4l5.2-5.2a4 4 0 0 0 5.3-5.3l-2.8 2.8-2.3-2.3 2.8-2.8z"],
+      checklist: ["M4 4h16v16H4z", "M8 12l3 3 5-6"],
+      clock: ["M12 7v5l3.5 2"],
+      chevron: ["M7 10l5 5 5-5"],
+    };
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", "20");
-    svg.setAttribute("height", "20");
     svg.setAttribute("aria-hidden", "true");
-    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circle.setAttribute("cx", "12");
-    circle.setAttribute("cy", "12");
-    circle.setAttribute("r", "9");
-    const hands = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    hands.setAttribute("d", "M12 7v5l3.5 2");
-    for (const node of [circle, hands]) {
+    svg.classList.add("tsm-icon", `tsm-icon-${name}`);
+    if (name === "clock") {
+      const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      c.setAttribute("cx", "12");
+      c.setAttribute("cy", "12");
+      c.setAttribute("r", "9");
+      svg.append(c);
+    }
+    for (const d of paths[name]) {
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      p.setAttribute("d", d);
+      svg.append(p);
+    }
+    for (const node of svg.children) {
       node.setAttribute("fill", "none");
       node.setAttribute("stroke", "currentColor");
       node.setAttribute("stroke-width", "2");
       node.setAttribute("stroke-linecap", "round");
-      svg.append(node);
+      node.setAttribute("stroke-linejoin", "round");
     }
     return svg;
+  }
+
+  // ---- form pages: work orders and checklists ------------------------------
+
+  // Formbuilder pages (work orders, checklists) are floated fixed-width boxes;
+  // the stylesheet stacks them. The checklist odometer loses its upper limit
+  // and accepts decimals.
+  function initFormPage() {
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "form";
+    html.dataset.tsmReady = "1";
+    wrapTickOptions(document.getElementById("formID"));
+    softenColourBoxes(document.getElementById("formID"));
+    fixOdometer();
+    diag.log("form page");
+  }
+
+  // Boxes the form author painted a loud colour (red warnings, yellow
+  // notices) keep the colour as a tint and an edge instead of a solid fill.
+  function softenColourBoxes(form) {
+    for (const box of form.querySelectorAll('[id^="outer_item-"]')) {
+      const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(box).backgroundColor);
+      if (!m) continue;
+      const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      const max = Math.max(r, g, b);
+      if (max === 0 || (max - Math.min(r, g, b)) / max < 0.3) continue;
+      box.classList.add("tsm-tint");
+      box.style.setProperty("--tsm-edge", `rgb(${r}, ${g}, ${b})`);
+    }
+  }
+
+  // Radio and checkbox options are a bare input followed by loose text;
+  // put each pair in a <label> so the text is tappable and an option never
+  // wraps in the middle.
+  function wrapTickOptions(form) {
+    for (const input of form.querySelectorAll('[id*="_style_item-"] input[type="radio"], [id*="_style_item-"] input[type="checkbox"]')) {
+      if (input.closest("label")) continue;
+      const label = document.createElement("label");
+      label.className = "tsm-opt";
+      input.before(label);
+      label.append(input);
+      let node = label.nextSibling;
+      while (node && node.nodeType === Node.TEXT_NODE) {
+        const next = node.nextSibling;
+        label.append(node);
+        node = next;
+      }
+    }
+  }
+
+  // The site re-applies validate[required,custom[integer],min[..],max[..]]
+  // on load and on every shift change; strip the max and allow decimals
+  // each time it does.
+  function fixOdometer() {
+    const input = document.getElementById("formbuilder_rigcheck_odometer");
+    if (!input) return;
+    input.setAttribute("inputmode", "decimal");
+    const relax = () => {
+      const fixed = input.className.replace(/,?\s*max\[[^\]]*\]/, "").replace(/custom\[integer\]/, "custom[number]");
+      if (fixed !== input.className) input.className = fixed;
+      if (input.hasAttribute("max")) input.removeAttribute("max");
+    };
+    relax();
+    new MutationObserver(relax).observe(input, { attributes: true, attributeFilter: ["class", "max"] });
+  }
+
+  function initFleetPage() {
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "fleet";
+    html.dataset.tsmReady = "1";
+    diag.log("fleet maintenance form");
   }
 
   // ---- punch clock page ----------------------------------------------------
@@ -229,6 +445,14 @@
     btn.textContent = kind === "out" ? "Punch Out" : "Punch In";
 
     box.append(clock, dateLine, shiftBox, kind ? btn : el("div", "tsm-punch-note", "No punch is available right now."));
+    // After login the site lands here with no menu in its header, so its
+    // Continue button is the only way on; keep it as a small link.
+    const cont = document.getElementById("continue");
+    if (cont) {
+      cont.classList.add("tsm-punch-continue");
+      cont.value = "Continue to the site \u203A";
+      box.append(cont);
+    }
     form.before(box);
 
     btn.addEventListener("click", () => {
@@ -477,6 +701,46 @@
 
   // ---- page chrome -------------------------------------------------------
 
+  // The page stacks its admin sections (status, PTO, availability, shift
+  // substitutions, trades, time off, pickups) above the calendar. Split them
+  // into a "More Options" tab and keep the schedule as the default tab.
+  function buildTabs() {
+    const toolbarTable = document.querySelector("table:has(> tbody > tr.tsm-toolbar)");
+    const userContent = document.getElementById("user_content");
+    if (!toolbarTable || !userContent) return;
+    const cell = toolbarTable.parentElement;
+    for (const child of cell.children) {
+      if (child === toolbarTable) child.classList.add("tsm-sched");
+      else if (child.tagName === "TABLE") child.classList.add(/^\s*my\s*schedule\s*$/i.test(child.textContent) ? "tsm-hide" : "tsm-more");
+    }
+    const row = cell.closest("tr");
+    if (row) {
+      for (const sibling of row.parentElement.children) {
+        if (sibling !== row) sibling.classList.add("tsm-more");
+      }
+    }
+
+    const tabs = el("div", "tsm-tabs");
+    tabs.setAttribute("role", "tablist");
+    const buttons = [["Schedule", "schedule"], ["More Options", "more"]].map(([label, name]) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "tsm-tab";
+      b.dataset.tab = name;
+      b.textContent = label;
+      b.setAttribute("role", "tab");
+      b.addEventListener("click", () => setTab(name));
+      tabs.append(b);
+      return b;
+    });
+    const setTab = (name) => {
+      html.dataset.tsmTab = name;
+      for (const b of buttons) b.setAttribute("aria-selected", String(b.dataset.tab === name));
+    };
+    userContent.before(tabs);
+    setTab("schedule");
+  }
+
   function decorateToolbar() {
     const viewSelect = document.getElementById("view_select");
     const row = viewSelect.closest("tr");
@@ -543,7 +807,25 @@
       return box;
     };
     if (common.length) wrap.append(group("Common Schedule Views", common));
-    if (other.length) wrap.append(group("Other Schedule Views", other));
+    if (other.length) {
+      // The long list is rarely needed; keep it behind a small button unless
+      // the page is already showing one of its views.
+      const more = group("Other Schedule Views", other);
+      more.classList.add("tsm-viewpick-more");
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "tsm-viewpick-toggle";
+      toggle.textContent = "See more view options";
+      toggle.setAttribute("aria-expanded", "false");
+      const show = (on) => {
+        more.hidden = !on;
+        toggle.hidden = on;
+        toggle.setAttribute("aria-expanded", String(on));
+      };
+      toggle.addEventListener("click", () => show(true));
+      wrap.append(toggle, more);
+      show(other.some((o) => o.selected));
+    }
     cell.append(wrap);
   }
 

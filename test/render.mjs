@@ -78,6 +78,63 @@ async function serveFixtures(context, blocked) {
 const browser = await chromium.launch({ headless: true });
 let failures = 0;
 
+// Work order and checklist pages: everything fits the phone, controls are
+// full width and finger sized, and the checklist odometer keeps no upper
+// limit even after the site re-applies its rules on a shift change.
+async function checkFormPage(page, name, after) {
+  if (!after.active) fail("add-on did not activate on the form page");
+  if (after.scrollWidth > VIEWPORT.width) fail(`form page overflows: scrollWidth ${after.scrollWidth}`);
+  if (after.overflowing.length) fail(`form elements past the right edge: ${after.overflowing.join(" | ")}`);
+  const st = await page.evaluate(() => {
+    const vis = (el) => el.offsetParent !== null && el.getBoundingClientRect().width > 0;
+    const fields = [...document.querySelectorAll("form input:not([type=hidden]):not([type=radio]):not([type=checkbox]):not([type=submit]):not([type=file]), form select, form textarea")].filter(vis);
+    const small = fields.filter((f) => f.getBoundingClientRect().width < 200 || parseFloat(getComputedStyle(f).fontSize) < 16).map((f) => `${f.tagName.toLowerCase()}#${f.id || f.name} ${Math.round(f.getBoundingClientRect().width)}px/${getComputedStyle(f).fontSize}`);
+    const ticks = [...document.querySelectorAll("form input[type=radio], form input[type=checkbox]")].filter(vis);
+    const tinyTicks = ticks.filter((t) => t.getBoundingClientRect().width < 20).length;
+    const submit = [...document.querySelectorAll("input[type=submit], button#vehicle_maintenance_request_dialog_button")].filter(vis).map((b) => Math.round(b.getBoundingClientRect().width));
+    const odo = document.getElementById("formbuilder_rigcheck_odometer");
+    return {
+      mode: document.documentElement.dataset.tsmPage,
+      fields: fields.length, small, ticks: ticks.length, tinyTicks, submit,
+      odo: odo ? { cls: odo.className, max: odo.getAttribute("max"), inputmode: odo.getAttribute("inputmode") } : null,
+    };
+  });
+  const tints = await page.evaluate(() => [...document.querySelectorAll(".tsm-tint")].map((b) => {
+    // computed colour may be rgb(r, g, b) or color(srgb r g b) after color-mix
+    const bg = getComputedStyle(b).backgroundColor;
+    const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(bg);
+    const c = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)/.exec(bg);
+    const rgb = m ? [m[1] / 255, m[2] / 255, m[3] / 255] : c ? [Number(c[1]), Number(c[2]), Number(c[3])] : null;
+    const lum = rgb ? 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2] : 0;
+    const big = [...b.querySelectorAll("*")].filter((e) => e.offsetParent && parseFloat(getComputedStyle(e).fontSize) > 16).length;
+    return { lum: Math.round(lum * 100) / 100, big, height: Math.round(b.getBoundingClientRect().height) };
+  }));
+  if (tints.some((t) => t.lum < 0.85)) fail(`a tinted box is still loud: ${JSON.stringify(tints)}`);
+  if (tints.some((t) => t.big)) fail(`a tinted box still has large text: ${JSON.stringify(tints)}`);
+  if (tints.length) console.log(`  ${tints.length} coloured boxes softened (heights ${tints.map((t) => t.height).join("/")}px)`);
+  if (st.small.length) fail(`${st.small.length} form field(s) too narrow or small: ${st.small.slice(0, 4).join(", ")}`);
+  if (st.tinyTicks) fail(`${st.tinyTicks} radio/checkbox controls under 20px`);
+  if (!st.submit.length || st.submit.some((w) => w < 300)) fail(`submit buttons: ${st.submit.join(", ") || "none visible"}`);
+  console.log(`  ${st.mode} page: ${st.fields} fields full width, ${st.ticks} tick boxes, submit ${st.submit.join("/")}px`);
+  if (st.odo) {
+    if (/max\[/.test(st.odo.cls) || st.odo.max !== null) fail(`odometer still limited: ${st.odo.cls} max=${st.odo.max}`);
+    if (!/custom\[number\]/.test(st.odo.cls) || /custom\[integer\]/.test(st.odo.cls)) fail(`odometer rejects decimals: ${st.odo.cls}`);
+    if (st.odo.inputmode !== "decimal") fail("odometer has no decimal keyboard hint");
+    // the site re-applies its rules when the shift changes
+    const again = await page.evaluate(async () => {
+      const sel = document.getElementById("formbuilder_rigcheck_shift");
+      if (!sel || sel.options.length < 2) return "no second shift";
+      sel.selectedIndex = sel.selectedIndex === 0 ? 1 : 0;
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 150));
+      return document.getElementById("formbuilder_rigcheck_odometer").className;
+    });
+    if (/max\[|custom\[integer\]/.test(again)) fail(`odometer limit came back after a shift change: ${again}`);
+    console.log(`  odometer rules: ${st.odo.cls} → after shift change: ${again}`);
+  }
+  await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
+}
+
 // Punch clock page: one big button, nothing else to scroll, and the
 // are-you-sure card before an early punch. The site's own flow ends in a
 // form submit (its break check is an AJAX call that is blocked here, and the
@@ -115,7 +172,8 @@ async function checkPunchPage(page, file) {
       }),
       headShown: vis(document.querySelector(".tsm-shift-head")),
       shaded: [...document.querySelectorAll(".tsm-shift-row")].filter((tr) => getComputedStyle(tr).backgroundColor !== "rgba(0, 0, 0, 0)").length,
-      footShown: vis(document.getElementById("continue")) || vis(document.getElementById("logout_button")),
+      continueShown: vis(document.getElementById("continue")) && /Continue/.test(document.getElementById("continue").value),
+      logoutShown: vis(document.getElementById("logout_button")),
       scrollHeight: document.documentElement.scrollHeight,
       innerHeight,
       scrollWidth: document.documentElement.scrollWidth,
@@ -146,7 +204,8 @@ async function checkPunchPage(page, file) {
   if (st.shiftRows.some((r) => r.value && r.lines > 1)) fail(`a shift row wraps: ${JSON.stringify(st.shiftRows)}`);
   if (st.headShown) fail("'Scheduled Shifts' title still shown");
   if (st.shaded) fail(`${st.shaded} shift row(s) have a background`);
-  if (st.footShown) fail("Continue / Logout still visible");
+  if (!st.continueShown) fail("Continue link missing on the punch page");
+  if (st.logoutShown) fail("Logout still visible");
   if (st.scrollHeight > st.innerHeight) fail(`punch page scrolls: ${st.scrollHeight} > ${st.innerHeight}`);
   if (st.scrollWidth > VIEWPORT.width) fail(`punch page overflows horizontally: ${st.scrollWidth}`);
   console.log(`  punch page: ${st.time} · ${st.buttons.map((b) => b.text).join("/")} · ${st.shiftRows.map((r) => `${r.label} ${r.value || "none"}`).join(" | ")}`);
@@ -345,9 +404,26 @@ for (const file of pages) {
     };
   }, blsHtml);
 
+  // The Fleet request page builds its form by script after load; empty the
+  // saved form first and put it back late, as the site does.
+  const lateForm = await page.evaluate(() => {
+    const box = document.getElementById("vehicle_maintenance_request_dialog");
+    if (!box) return false;
+    window.__tsmLate = box.innerHTML;
+    box.innerHTML = "";
+    return true;
+  });
+
   await page.addStyleTag({ path: cssPath });
   await page.addScriptTag({ path: jsPath });
   await page.waitForTimeout(500);
+  if (lateForm) {
+    const early = await page.evaluate(() => document.documentElement.dataset.tsmPage || "none");
+    if (early !== "none") fail(`fleet page styled before its form existed (${early})`);
+    await page.evaluate(() => { document.getElementById("vehicle_maintenance_request_dialog").innerHTML = window.__tsmLate; });
+    await page.waitForFunction(() => document.documentElement.dataset.tsmPage === "fleet", null, { timeout: 5000 }).catch(() => {});
+    console.log("  fleet form injected 500 ms after the script ran");
+  }
 
   const after = await page.evaluate(() => {
     const html = document.documentElement;
@@ -365,22 +441,89 @@ for (const file of pages) {
       overflowing: wide.slice(0, 5).map((el) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : ""} right=${Math.round(el.getBoundingClientRect().right)}`),
       visibleDays: [...document.querySelectorAll('td[id^="day_"]')].filter((td) => td.offsetParent !== null).length,
       chips: document.querySelectorAll(".tsm-chip").length,
-      hasHeader: Boolean(document.getElementById("ts_menus_right_div")),
-      punchLink: document.getElementById("tsm-punchlink"),
-      // The harness header keeps its desktop search box, so only visibility
-      // is checked here, not that the link fits beside it.
-      punchLinkShown: Boolean(document.getElementById("tsm-punchlink")?.offsetParent),
-      punchLinkHref: document.getElementById("tsm-punchlink")?.getAttribute("href"),
-      chat: Boolean(document.getElementById("chat_button")),
-      chatShown: Boolean(document.getElementById("chat_button")?.offsetParent),
+      hasHeader: Boolean(document.getElementById("ts_menus_menu_div")),
+      nav: [...document.querySelectorAll("#tsm-topnav .tsm-topbtn")].map((b) => ({ label: b.title, href: b.getAttribute("href"), shown: Boolean(b.offsetParent), right: Math.round(b.getBoundingClientRect().right) })),
+      navAfterBurger: document.querySelector('button[title="All Menus"]')?.nextElementSibling?.id === "tsm-topnav",
+      chromeShown: ["ts_menu_search_text_div", "sysmgt_button", "chat_button", "myportal_button", "ts_menus_user_div"].filter((id) => document.getElementById(id)?.offsetParent).concat([...document.querySelectorAll(".ts-menus-logo")].filter((e) => e.offsetParent).map(() => "logo")),
+      // the bell stays in the page as a 1px invisible activator, never as a visible button
+      bell: document.getElementById("notifications_button") ? document.getElementById("notifications_button").getBoundingClientRect().width > 2 : null,
+      // every bar item left to right: x range and height
+      barItems: [document.querySelector('button[title="All Menus"]'), ...document.querySelectorAll("#tsm-topnav .tsm-topbtn")]
+        .filter((e) => e && e.offsetParent).map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; }),
       punchPage: Boolean(document.getElementById("punchin_form")),
+      formPage: html.dataset.tsmPage === "form" || html.dataset.tsmPage === "fleet",
     };
   });
   if (after.hasHeader) {
-    if (!after.punchLinkShown) fail("header has no visible Punch link");
-    if (after.punchLinkHref !== "/main.php?a=user:punchin") fail(`Punch link points at ${after.punchLinkHref}`);
-    if (after.chatShown) fail("chat button still visible in the header");
-    console.log(`  header: Punch link ${after.punchLinkShown ? "shown" : "missing"}; chat button ${after.chat ? (after.chatShown ? "visible" : "hidden") : "not on this page"}`);
+    const labels = after.nav.map((b) => b.label);
+    if (JSON.stringify(labels) !== JSON.stringify(["Schedule", "Work orders", "Checklists", "Punch Clock"])) fail(`top bar buttons are ${labels.join(", ")}`);
+    if (after.nav.some((b) => !b.shown)) fail("a top bar button is hidden");
+    if (after.nav.some((b) => b.right > VIEWPORT.width)) fail("the top bar runs past the right edge");
+    if (!after.navAfterBurger) {
+      if (await page.locator('button[title="All Menus"]').count()) fail("top bar is not right after the hamburger");
+    }
+    if (after.nav[0]?.href !== "/main.php?a=user:schedule" || after.nav[3]?.href !== "/main.php?a=user:punchin") fail(`top bar links: ${after.nav.map((b) => b.href).join(", ")}`);
+    if (after.chromeShown.length) fail(`header still shows: ${after.chromeShown.join(", ")}`);
+    if (after.bell === true) fail("notifications bell still visible in the bar");
+    if (after.barItems.length >= 5) {
+      const gaps = after.barItems.slice(1).map((b, i) => b[0] - after.barItems[i][1]);
+      const edges = [after.barItems[0][0], VIEWPORT.width - after.barItems[after.barItems.length - 1][1]];
+      const all = gaps.concat(edges);
+      if (Math.max(...all) - Math.min(...all) > 14) fail(`bar items not spread evenly: gaps ${gaps.join(",")} edges ${edges.join(",")}`);
+      const heights = after.barItems.map((b) => b[2]);
+      if (Math.max(...heights) - Math.min(...heights) > 3) fail(`bar items differ in height: ${heights.join(",")}`);
+    }
+    console.log(`  header: ${labels.length} quick buttons; bell ${after.bell === null ? "not on this page" : "hidden"}; hidden ok`);
+
+    // The hamburger's list exists in the DOM even while closed (the saved
+    // pages' Vue menus do not animate open here); it gets an Alerts entry
+    // after Punch Clock whose tap triggers the hidden bell.
+    if (after.bell !== null && await page.locator('button[title="All Menus"]').count()) {
+      const ham = await page.evaluate(() => {
+        const id = document.querySelector('button[title="All Menus"]').getAttribute("aria-controls");
+        const list = document.getElementById(id)?.querySelector(".v-list");
+        const items = list ? [...list.querySelectorAll("a.ts_menu_list_item")].map((a) => a.textContent.trim()) : [];
+        const alerts = document.getElementById("tsm-alerts-item");
+        const bell = document.getElementById("notifications_button");
+        window.__bellClicks = 0;
+        bell.addEventListener("click", () => { window.__bellClicks += 1; });
+        const anchor = items.includes("Punch Clock") ? "Punch Clock" : "My Account";
+        return { items, alerts: Boolean(alerts), anchor, afterPunch: items.indexOf("Alerts") === items.indexOf(anchor) + 1, icon: alerts?.querySelector("i.mdi-bell") ? true : false };
+      });
+      if (!ham.items.length) fail("hamburger list not found");
+      else {
+        if (!ham.alerts || !ham.icon) fail("Alerts entry missing from the hamburger list");
+        if (!ham.afterPunch) fail(`Alerts entry not after ${ham.anchor}: ${ham.items.join(", ")}`);
+        await page.locator("#tsm-alerts-item").dispatchEvent("click");
+        await page.waitForTimeout(200);
+        const clicks = await page.evaluate(() => window.__bellClicks);
+        if (clicks !== 1) fail(`Alerts entry triggered the bell ${clicks} times`);
+        console.log(`  hamburger: ${ham.items.length} items, Alerts after ${ham.anchor}, triggers the bell`);
+      }
+    }
+
+    // The wrench and checklist menus open under their buttons and close on a tap outside.
+    for (const [title, expected] of [["Work orders", 5], ["Checklists", 2]]) {
+      await page.locator(`.tsm-topbtn[title="${title}"]`).click();
+      await page.waitForTimeout(100);
+      const menu = await page.evaluate(() => {
+        const m = document.querySelector(".tsm-menu:not([hidden])");
+        if (!m) return null;
+        const r = m.getBoundingClientRect();
+        return { items: [...m.querySelectorAll(".tsm-menu-item")].map((a) => [a.textContent, a.getAttribute("href")]), left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top) };
+      });
+      if (!menu) fail(`${title} menu did not open`);
+      else {
+        if (menu.items.length !== expected) fail(`${title} menu has ${menu.items.length} items, expected ${expected}`);
+        if (menu.left < 0 || menu.right > VIEWPORT.width) fail(`${title} menu off-screen: ${menu.left}..${menu.right}`);
+        if (title === "Checklists" && (menu.items[0][1] !== "/main.php?a=formbuilder:display_form&form_id=125" || menu.items[1][1] !== "/main.php?a=formbuilder:display_form&form_id=112")) fail(`checklist links: ${JSON.stringify(menu.items)}`);
+        if (title === "Work orders" && !menu.items.some(([t, h]) => t.includes("Fleet") && h === "/main.php?a=user:vehicle_maintenance_request")) fail(`work order links: ${JSON.stringify(menu.items)}`);
+        if (title === "Work orders") await page.screenshot({ path: join(outDir, `${name}-menu-workorders.png`) });
+      }
+      await page.mouse.click(VIEWPORT.width / 2, VIEWPORT.height - 40);
+      await page.waitForTimeout(100);
+      if (await page.locator(".tsm-menu:not([hidden])").count()) fail(`${title} menu did not close on a tap outside`);
+    }
   }
 
   console.log(`  before: width ${before.scrollWidth}px, ${before.days} days, ${before.handlers} pickup handlers`);
@@ -388,6 +531,8 @@ for (const file of pages) {
 
   if (after.punchPage) {
     await checkPunchPage(page, file);
+  } else if (after.formPage) {
+    await checkFormPage(page, name, after);
   } else if (!before.hasMonth) {
     console.log("  (no calendar on this page; chrome styling only)");
   } else {
@@ -414,11 +559,19 @@ for (const file of pages) {
     const labels = [...document.querySelectorAll(".tsm-viewpick .tsm-label")].map((l) => l.textContent);
     const commonOpts = selects[0] ? [...selects[0].options].filter((o) => o.value).map((o) => o.text) : [];
     const otherOpts = selects[1] ? [...selects[1].options].filter((o) => o.value).map((o) => o.text) : [];
-    return { count: selects.length, labels, commonOpts, otherOpts, goVisible: Boolean(document.getElementById("submit_form")?.offsetParent) };
+    const more = document.querySelector(".tsm-viewpick-more");
+    const toggle = document.querySelector(".tsm-viewpick-toggle");
+    return { count: selects.length, labels, commonOpts, otherOpts, goVisible: Boolean(document.getElementById("submit_form")?.offsetParent),
+      moreShown: Boolean(more?.offsetParent), toggleShown: Boolean(toggle?.offsetParent), toggleText: toggle?.textContent };
   });
   if (toolbar.count) {
-    console.log(`  view pickers: ${toolbar.labels.join(" / ")}; common = ${toolbar.commonOpts.join(", ")}; other = ${toolbar.otherOpts.length} views`);
+    console.log(`  view pickers: ${toolbar.labels.join(" / ")}; common = ${toolbar.commonOpts.join(", ")}; other = ${toolbar.otherOpts.length} views behind "${toolbar.toggleText}"`);
     if (toolbar.count !== 2) fail(`expected 2 view pickers, got ${toolbar.count}`);
+    if (toolbar.moreShown || !toolbar.toggleShown || toolbar.toggleText !== "See more view options") fail(`other views should be hidden behind the button: ${JSON.stringify(toolbar)}`);
+    await page.locator(".tsm-viewpick-toggle").click();
+    await page.waitForTimeout(100);
+    const revealed = await page.evaluate(() => ({ more: Boolean(document.querySelector(".tsm-viewpick-more")?.offsetParent), toggle: Boolean(document.querySelector(".tsm-viewpick-toggle")?.offsetParent), label: document.querySelector(".tsm-viewpick-more .tsm-label")?.textContent, options: document.querySelectorAll(".tsm-viewpick-more option:not([hidden])").length }));
+    if (!revealed.more || revealed.toggle || revealed.label !== "Other Schedule Views" || revealed.options !== toolbar.otherOpts.length) fail(`button did not reveal the other views as before: ${JSON.stringify(revealed)}`);
     if (toolbar.goVisible) fail("Go button still visible");
     if (toolbar.commonOpts.some((t) => /Vehicle\/Location/i.test(t)) || toolbar.otherOpts.some((t) => /Vehicle\/Location/i.test(t))) fail("prefix not stripped from view names");
     const expectedCommon = ["Individual Month View", "Available Open Shifts", "ALS", "BLS", "Details", "Dispatch"];
@@ -547,6 +700,40 @@ for (const file of pages) {
     } else {
       console.log("  (no open shift in this fixture, spares panel not exercised)");
     }
+  }
+
+  // Schedule / More Options tabs: the admin sections hide behind the second
+  // tab, the calendar is the default, and each tab fits the phone.
+  if (before.hasMonth && after.active && !after.punchPage && !after.formPage) {
+    const tabState = () => page.evaluate(() => {
+      const vis = (el) => el.offsetParent !== null;
+      const more = [...document.querySelectorAll(".tsm-more")];
+      return {
+        tab: document.documentElement.dataset.tsmTab,
+        tabs: [...document.querySelectorAll(".tsm-tab")].map((b) => [b.textContent, b.getAttribute("aria-selected")]),
+        moreCount: more.length, moreShown: more.filter(vis).length,
+        linksShown: [...document.querySelectorAll("td.indent > a")].filter(vis).length,
+        calendarShown: vis(document.querySelector("table.month")), toolbarShown: vis(document.querySelector(".tsm-viewpick")),
+        mySchedHeader: [...document.querySelectorAll("td.std_header")].filter((h) => /my\s*schedule/i.test(h.textContent) && vis(h)).length,
+        scrollWidth: document.documentElement.scrollWidth,
+      };
+    });
+    let t = await tabState();
+    if (t.tab !== "schedule" || JSON.stringify(t.tabs) !== JSON.stringify([["Schedule", "true"], ["More Options", "false"]])) fail(`tabs: ${JSON.stringify(t)}`);
+    if (t.moreCount < 5 || t.moreShown) fail(`Schedule tab: ${t.moreShown} of ${t.moreCount} admin sections visible`);
+    if (t.linksShown || !t.calendarShown || !t.toolbarShown || t.mySchedHeader) fail(`Schedule tab content: ${JSON.stringify(t)}`);
+    await page.locator(".tsm-tab", { hasText: "More Options" }).click();
+    await page.waitForTimeout(150);
+    t = await tabState();
+    if (t.tab !== "more" || t.moreShown !== t.moreCount || t.calendarShown || t.toolbarShown) fail(`More Options tab: ${JSON.stringify(t)}`);
+    if (t.linksShown < 5) fail(`More Options shows ${t.linksShown} quick links, expected at least 5`);
+    if (t.scrollWidth > VIEWPORT.width) fail(`More Options overflows: ${t.scrollWidth}`);
+    await page.screenshot({ path: join(outDir, `${name}-more-options.png`), fullPage: true });
+    await page.locator(".tsm-tab", { hasText: "Schedule" }).click();
+    await page.waitForTimeout(150);
+    t = await tabState();
+    if (t.tab !== "schedule" || t.moreShown || !t.calendarShown) fail("switching back to Schedule failed");
+    console.log(`  tabs: Schedule default; More Options holds ${t.moreCount} sections with ${before.hasMonth ? "quick links" : ""} and nothing else`);
   }
 
   await page.screenshot({ path: join(outDir, `${name}-after-top.png`) });

@@ -106,6 +106,40 @@ html[data-tsm="on"] td.data_field {
   padding: 0 0 0 6px !important;
 }
 
+/* ---------- schedule page tabs: Schedule / More Options ---------- */
+
+html[data-tsm="on"] .tsm-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 4px 0 12px;
+  padding: 3px;
+  background: #e5e7eb;
+  border-radius: 12px;
+}
+
+html[data-tsm="on"] .tsm-tab {
+  flex: 1 1 0;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #374151;
+  font: 700 14px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm="on"] .tsm-tab[aria-selected="true"] {
+  background: #fff;
+  color: #003060;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+html[data-tsm="on"] .tsm-hide,
+html[data-tsm-tab="schedule"] .tsm-more,
+html[data-tsm-tab="more"] .tsm-sched,
+html[data-tsm-tab="more"] .tsm-fab {
+  display: none !important;
+}
+
 /* ---------- toolbar: view, legend, month/year ---------- */
 
 html[data-tsm="on"] table:has(> tbody > tr.tsm-toolbar),
@@ -147,6 +181,29 @@ html[data-tsm="on"] .tsm-viewpick {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* sits tight under the Common dropdown, right-aligned, with the legend
+   kept at a distance */
+html[data-tsm="on"] .tsm-viewpick-toggle {
+  align-self: flex-end;
+  margin: -8px 0 6px;
+  padding: 4px 2px;
+  border: 0;
+  background: none;
+  color: #4b5563;
+  font: 500 12px system-ui, -apple-system, Roboto, sans-serif;
+  text-decoration: none;
+}
+
+html[data-tsm="on"] .tsm-viewpick-toggle::after {
+  content: " \203A";
+  font-weight: 700;
+}
+
+html[data-tsm="on"] .tsm-viewpick-toggle[hidden],
+html[data-tsm="on"] .tsm-viewpick-more[hidden] {
+  display: none;
 }
 
 html[data-tsm="on"] .tsm-viewselect {
@@ -1246,20 +1303,21 @@ html[data-tsm-mode="location"] tr.unassigned {
 html[data-tsm-mode="location"] tr.unassigned span.hightlight {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 9px 12px;
-  border-radius: 9px;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 7px;
   background: #6eb53f;
   color: #fff !important;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 800;
+  line-height: 1.2;
   cursor: pointer;
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
 }
 
 html[data-tsm-mode="location"] tr.unassigned span.hightlight::after {
   content: "Request ›";
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   opacity: 0.9;
 }
@@ -1363,36 +1421,466 @@ html[data-tsm="on"] .ui-widget-overlay {
   height: auto !important;
 }
 
-/* ---------- header: punch clock link in place of chat ---------- */
+/* ---------- header: the top bar ---------- */
 
-html[data-tsm-chrome="on"] #chat_button {
+/* gone: logo, search, settings, chat, portal and the name block */
+html[data-tsm-chrome="on"] .ts-menus-logo,
+html[data-tsm-chrome="on"] #ts_menus_menu_div > .v-col > div:has(> .ts-menus-logo),
+html[data-tsm-chrome="on"] #ts_menu_search_text_div,
+html[data-tsm-chrome="on"] #sysmgt_button,
+html[data-tsm-chrome="on"] #chat_button,
+html[data-tsm-chrome="on"] #myportal_button,
+html[data-tsm-chrome="on"] #ts_menus_user_div {
   display: none !important;
 }
 
-html[data-tsm-chrome="on"] #ts_menus_right_div {
-  display: flex;
+/* The site lays the bar out as a grid of columns. Flatten the columns and
+   the nav so the hamburger and the four quick buttons are direct items of
+   one row, spread evenly. */
+html[data-tsm-chrome="on"] #ts_menus_menu_div {
+  display: flex !important;
   align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
+  justify-content: space-evenly;
+  flex-wrap: nowrap;
+  padding: 4px 2px !important;
 }
 
-html[data-tsm-chrome="on"] .tsm-punchlink {
+html[data-tsm-chrome="on"] #ts_menus_menu_div > .v-col:has(#tsm-topnav),
+html[data-tsm-chrome="on"] #ts_menus_menu_div > .v-col:has(#ts_menus_right_div),
+html[data-tsm-chrome="on"] #ts_menus_right_div,
+html[data-tsm-chrome="on"] #ts_menus_right_div > section,
+html[data-tsm-chrome="on"] .tsm-topnav {
+  display: contents !important;
+}
+
+/* the site's hamburger, sized like our buttons */
+html[data-tsm-chrome="on"] #ts_menus_menu_div button[title="All Menus"] {
+  width: 46px !important;
+  height: 40px !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+html[data-tsm-chrome="on"] #ts_menus_menu_div button[title="All Menus"] .v-icon {
+  font-size: 26px !important;
+  width: 26px !important;
+  height: 26px !important;
+}
+
+html[data-tsm-chrome="on"] #ts_menus_right_div > :not(section),
+html[data-tsm-chrome="on"] #ts_menus_right_div > section > div:not(:has(#notifications_button)) {
+  display: none !important;
+}
+
+/* The bell leaves the bar but stays as an invisible activator at the top
+   right, so the Alerts entry in the hamburger can open its panel there. */
+html[data-tsm-chrome="on"] #ts_menus_right_div > section > div:has(#notifications_button) {
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+html[data-tsm-chrome="on"] .tsm-topbtn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
   flex: 0 0 auto;
-  padding: 7px 12px 7px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  width: 46px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
   color: #fff !important;
-  font: 700 13px system-ui, -apple-system, Roboto, sans-serif;
   text-decoration: none !important;
+  -webkit-tap-highlight-color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-tsm-chrome="on"] .tsm-topbtn-menu {
+  width: 56px;
+}
+
+html[data-tsm-chrome="on"] .tsm-topbtn-open {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+html[data-tsm-chrome="on"] .tsm-icon {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+html[data-tsm-chrome="on"] .tsm-icon-chevron {
+  width: 14px;
+  height: 14px;
+  margin-left: -1px;
+  opacity: 0.85;
+}
+
+html[data-tsm-chrome="on"] .tsm-menu {
+  position: fixed;
+  z-index: 10002;
+  min-width: 240px;
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  font-family: system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm-chrome="on"] .tsm-menu[hidden] {
+  display: none;
+}
+
+html[data-tsm-chrome="on"] .tsm-menu-item {
+  display: block;
+  padding: 13px 14px;
+  border-radius: 8px;
+  color: #111827 !important;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none !important;
+}
+
+html[data-tsm-chrome="on"] .tsm-menu-item + .tsm-menu-item {
+  border-top: 1px solid #f1f3f5;
+}
+
+/* ---------- form pages: work orders and checklists ---------- */
+
+html[data-tsm-page="form"] #main-content {
+  padding: 8px 12px 28px !important;
+}
+
+html[data-tsm-page="form"] #pdfForm {
+  display: none !important;
+}
+
+/* the fixed-width, floated page scaffolding */
+html[data-tsm-page="form"] #main-content > div,
+html[data-tsm-page="form"] #printArea,
+html[data-tsm-page="form"] #formID > div,
+html[data-tsm-page="form"] #sortable,
+html[data-tsm-page="form"] .fblist,
+html[data-tsm-page="form"] ul.element {
+  width: auto !important;
+  max-width: 100%;
+  float: none !important;
+  box-sizing: border-box;
+}
+
+html[data-tsm-page="form"] .fblist {
+  margin: 0 0 14px !important;
+  padding: 8px !important;
+  border: 1px solid #dfe3e8 !important;
+  border-radius: 12px;
+  background: #fff;
+}
+
+html[data-tsm-page="form"] [id^="block-title-"] {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+html[data-tsm-page="form"] li.itemBox {
+  display: block;
+  float: none !important;
+  width: auto !important;
+  margin: 0 0 8px;
+}
+
+html[data-tsm-page="form"] [id^="outer_item-"] {
+  display: block;
+  float: none !important;
+  width: auto !important;
+  box-sizing: border-box;
+  padding: 10px 12px !important;
+  border-radius: 10px;
+}
+
+html[data-tsm-page="form"] [id^="label_item-"] {
+  display: block;
+  float: none !important;
+  width: auto !important;
+  margin-bottom: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+html[data-tsm-page="form"] [id^="validate_item-"] {
+  float: none !important;
+  font-size: 13px !important;
+}
+
+html[data-tsm-page="form"] [id^="selectbox_item-"],
+html[data-tsm-page="form"] [id^="outer_item-"] > div[style*="float"],
+html[data-tsm-page="form"] [id*="_style_item-"] {
+  display: block;
+  float: none !important;
+  width: auto !important;
+}
+
+html[data-tsm-page="form"] #formID input[type="text"],
+html[data-tsm-page="form"] #formID input:not([type]),
+html[data-tsm-page="form"] #formID input[type="number"],
+html[data-tsm-page="form"] #formID select,
+html[data-tsm-page="form"] #formID textarea {
+  display: block;
+  float: none !important;
+  width: 100% !important;
+  max-width: 100%;
+  box-sizing: border-box;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 10px 12px !important;
+  border: 1px solid #cfd4db !important;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-size: 16px !important;
+  line-height: 1.3;
+}
+
+html[data-tsm-page="form"] #formID textarea {
+  min-height: 110px;
+}
+
+html[data-tsm-page="form"] #formID select[multiple] {
+  min-height: 140px;
+}
+
+html[data-tsm-page="form"] #formID input[type="radio"],
+html[data-tsm-page="form"] #formID input[type="checkbox"] {
+  width: 22px !important;
+  height: 22px !important;
+  margin: 2px 8px 2px 0 !important;
+  vertical-align: middle;
+}
+
+html[data-tsm-page="form"] .tsm-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 18px 8px 0;
+  font-size: 15px;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
-html[data-tsm-chrome="on"] .tsm-punchlink svg {
+html[data-tsm-page="form"] .tsm-opt input {
+  margin: 0 !important;
+}
+
+html[data-tsm-page="form"] [id^="outer_item-"],
+html[data-tsm-page="form"] [id*="_style_item-"],
+html[data-tsm-page="form"] li.itemBox {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+html[data-tsm-page="form"] #formID table {
+  width: 100% !important;
+  max-width: 100%;
+  height: auto !important;
+  table-layout: auto;
+}
+
+html[data-tsm-page="form"] #formID td {
+  white-space: normal !important;
+  vertical-align: top;
+}
+
+html[data-tsm-page="form"] #formID img {
+  max-width: 100%;
+  height: auto;
+}
+
+html[data-tsm-page="form"] #formID .submit,
+html[data-tsm-page="form"] #formID input[type="submit"] {
   display: block;
+  width: 100%;
+  margin: 8px 0 0;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #003060;
+  color: #fff;
+  font: 700 17px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm-page="form"] #formID input[name="finish_later"] {
+  background: #fff;
+  border: 1px solid #003060;
+  color: #003060;
+}
+
+html[data-tsm-page="form"] #formID a.button,
+html[data-tsm-page="form"] #formID a[onclick*="addUploadBox"] {
+  display: inline-block;
+  padding: 8px 0;
+  font-weight: 700;
+}
+
+/* loud warning/notice boxes become a pale tint with a coloured edge */
+html[data-tsm-page="form"] .tsm-tint {
+  background-color: color-mix(in srgb, var(--tsm-edge) 9%, #fff) !important;
+  color: #1f2937 !important;
+  border-left: 4px solid color-mix(in srgb, var(--tsm-edge) 70%, #333);
+  padding: 8px 12px !important;
+}
+
+html[data-tsm-page="form"] .tsm-tint *:not(input):not(select):not(textarea) {
+  color: #1f2937 !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+}
+
+html[data-tsm-page="form"] .tsm-tint h1,
+html[data-tsm-page="form"] .tsm-tint h2,
+html[data-tsm-page="form"] .tsm-tint h3,
+html[data-tsm-page="form"] .tsm-tint h4 {
+  margin: 0 0 4px;
+  font-size: 14px !important;
+  font-weight: 700;
+}
+
+html[data-tsm-page="form"] .tsm-tint p,
+html[data-tsm-page="form"] .tsm-tint ul,
+html[data-tsm-page="form"] .tsm-tint ol {
+  margin: 0 0 4px;
+}
+
+html[data-tsm-page="form"] .tsm-tint [id^="label_item-"] {
+  font-size: 15px !important;
+  font-weight: 600;
+}
+
+html[data-tsm-page="form"] .tsm-tint img {
+  max-height: 18px;
+  width: auto;
+  vertical-align: middle;
+}
+
+html[data-tsm-page="form"] .tsm-tint table {
+  width: auto !important;
+  margin: 0 !important;
+}
+
+html[data-tsm-page="form"] .tsm-tint td {
+  padding: 0 8px 0 0 !important;
+}
+
+/* the odometer and shift picker above the checklist */
+html[data-tsm-page="form"] label[for="formbuilder_rigcheck_odometer"] {
+  display: block !important;
+  width: auto !important;
+  margin: 10px 0 6px;
+  text-align: left !important;
+  font-weight: 600;
+}
+
+/* ---------- fleet maintenance request ---------- */
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form table,
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form tbody,
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form tr,
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form td {
+  display: block;
+  width: auto !important;
+  box-sizing: border-box;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form tr {
+  padding: 8px 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form tr:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form td.grouping {
+  flex: 1 1 auto;
+  padding: 0 0 6px !important;
+  background: none !important;
+  text-align: left !important;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form tr:has(input[type="checkbox"]) td {
+  padding: 0 !important;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form td:not(.grouping) {
+  padding: 0 !important;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form input[type="text"],
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form select,
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form textarea {
+  display: block;
+  width: 100% !important;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #cfd4db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 16px;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form textarea {
+  min-height: 110px;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_form input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_buttons {
+  width: auto !important;
+  margin-top: 12px;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_button {
+  display: block;
+  width: 100%;
+  padding: 14px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: #003060 !important;
+  color: #fff !important;
+  font: 700 17px system-ui, -apple-system, Roboto, sans-serif !important;
+}
+
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_button .ui-button-icon,
+html[data-tsm-page="fleet"] #vehicle_maintenance_request_dialog_button .ui-button-icon-space {
+  display: none;
+}
+
+html[data-tsm-page="fleet"] .std_header {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 4px 0 8px;
 }
 
 /* ---------- punch clock page ---------- */
@@ -1521,6 +2009,19 @@ html[data-tsm-page="punch"] .tsm-punch-out {
 html[data-tsm-page="punch"] .tsm-punch-btn:disabled {
   opacity: 0.6;
   box-shadow: none;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-continue {
+  display: block;
+  width: auto;
+  margin: 22px auto 0;
+  padding: 10px 14px;
+  border: 0;
+  background: none;
+  color: #003060;
+  font: 600 15px system-ui, -apple-system, Roboto, sans-serif;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 html[data-tsm-page="punch"] .tsm-punch-note {
