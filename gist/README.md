@@ -1,4 +1,4 @@
-# Post-Traumatic
+# How to Install Post-Traumatic
 
 A mod to make Traumasoft mobile-friendly. Works with Safari on iPhone or Firefox on Android. Post-Traumatic puts the most-used options directly in the top bar and restructures the schedule, work order, checklist, and punch clock pages for dramatically increased usability. It also lets the log-in page remember your username after the first time it's typed. The rest of the site is unchanged.
 
@@ -11,7 +11,7 @@ Talk to Julian Eden on Blink if you encounter any issues.
 3. In Safari, open https://tinyurl.com/post-traumatic. Tap **aA** in the address bar, tap **Userscripts**, then **Install**.
 4. (*Optional, for faster access*) To get a home screen icon that opens the schedule: open the **Shortcuts** app, tap **+**, tap **Add Action**, search for **Open URLs** and pick it, tap the URL field and enter `https://armstrong.traumasoft.com/main.php?a=user:schedule`, then tap the **ⓘ** at the bottom and choose **Add to Home Screen**. (Safari's own Add to Home Screen doesn't work here: icons made that way open the site without the mod.)
 
-To update later, repeat step 3.
+To update Post-Traumatic later in case of a new version, repeat step 3.
 
 ## Android (Firefox)
 
