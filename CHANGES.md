@@ -12,4 +12,4 @@ Phone widths only (820px and under), except the login username.
 - **Odometer** accepts any reading at or above the last one.
 - **Punch clock** is one big button. More than 7 minutes early asks first.
 - **Dialogs** fit the phone.
-- **Privacy**: nothing leaves traumasoft.com. The only extra requests are the site's own unit views.
+- **Privacy**: nothing leaves traumasoft.com.
