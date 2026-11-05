@@ -14,5 +14,6 @@ To update later, open that link again and tap Install.
 
 1. In Firefox, open https://addons.mozilla.org/firefox/addon/post-traumatic/
 2. Tap **Add to Firefox**, then **Add**. Updates are automatic.
+3. (*Optional, for faster access*) To create an icon that directly opens the page, open the schedule in Firefox. Tap the 3-dots in the top right corner. Tap More. Tap `Add to Home Screen`.
 
 Talk to Julian Eden on Blink if you encounter any issues.
