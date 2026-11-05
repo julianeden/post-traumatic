@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium, webkit } from "playwright-core";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtures = resolve(process.env.TSM_FIXTURES ?? join(root, "test", "fixtures"));
@@ -19,6 +19,18 @@ mkdirSync(outDir, { recursive: true });
 const VIEWPORT = { width: 412, height: 915 };
 const cssPath = join(root, "src", "content.css");
 const jsPath = join(root, "src", "content.js");
+// TSM_USERSCRIPT=1 injects only the bundled userscript (which carries the
+// stylesheet itself); TSM_BROWSER=webkit runs in Safari's engine.
+const userscript = process.env.TSM_USERSCRIPT === "1" ? join(root, "userscript", "traumasoft-mobile.user.js") : null;
+const engine = process.env.TSM_BROWSER === "webkit" ? webkit : chromium;
+async function inject(page) {
+  if (userscript) {
+    await page.addScriptTag({ path: userscript });
+  } else {
+    await page.addStyleTag({ path: cssPath });
+    await page.addScriptTag({ path: jsPath });
+  }
+}
 
 if (!existsSync(fixtures)) {
   console.log(`no fixtures at ${fixtures}; skipping (set TSM_FIXTURES to a folder of saved pages)`);
@@ -75,7 +87,8 @@ async function serveFixtures(context, blocked) {
   });
 }
 
-const browser = await chromium.launch({ headless: true });
+const browser = await engine.launch({ headless: true });
+console.log(`engine: ${process.env.TSM_BROWSER === "webkit" ? "webkit" : "chromium"}; injecting ${userscript ? "the userscript bundle" : "content.css + content.js"}`);
 let failures = 0;
 
 // Work order and checklist pages: everything fits the phone, controls are
@@ -150,8 +163,7 @@ async function checkPunchPage(page, file) {
       form.addEventListener("submit", (e) => { e.preventDefault(); window.__tsmSubmits += 1; });
       Object.defineProperty(form, "submit", { value: () => { window.__tsmSubmits += 1; }, configurable: true });
     });
-    await page.addStyleTag({ path: cssPath });
-    await page.addScriptTag({ path: jsPath });
+    await inject(page);
     await page.waitForTimeout(400);
   };
   const state = () => page.evaluate(() => {
@@ -301,16 +313,15 @@ if (existsSync(loginFixture)) {
     const text = msg.text();
     if (text.includes("[Traumasoft Mobile]")) console.log(`  console: ${text.replace("[Traumasoft Mobile] ", "")}`);
   });
-  const inject = async () => {
-    await page.addStyleTag({ path: cssPath });
-    await page.addScriptTag({ path: jsPath });
+  const injectLogin = async () => {
+    await inject(page);
     await page.waitForTimeout(300);
   };
   const USER = "input.v-text-field[data-testid='login-identifier'] input, [data-testid='login-identifier'] input";
 
   // First visit: nothing remembered; typing and pressing Continue stores it.
   await page.goto(`${origin}/login.php`, { waitUntil: "load", timeout: 60_000 });
-  await inject();
+  await injectLogin();
   const fresh = await page.evaluate((sel) => {
     const i = document.querySelector(sel);
     return { found: Boolean(i), value: i?.value, autocomplete: i?.getAttribute("autocomplete"), name: i?.name, stored: localStorage.getItem("tsm.login.username") };
@@ -334,7 +345,7 @@ if (existsSync(loginFixture)) {
     // Without the site's script, Enter would submit the bare form natively.
     document.querySelector("form")?.addEventListener("submit", (e) => e.preventDefault());
   }, USER);
-  await inject();
+  await injectLogin();
   const again = await page.evaluate((sel) => ({ value: document.querySelector(sel).value, events: window.__tsmInputEvents }), USER);
   if (again.value !== "jeden") fail(`login: username not filled on return (value "${again.value}")`);
   if (!again.events) fail("login: filled value was not announced with an input event");
@@ -414,8 +425,7 @@ for (const file of pages) {
     return true;
   });
 
-  await page.addStyleTag({ path: cssPath });
-  await page.addScriptTag({ path: jsPath });
+  await inject(page);
   await page.waitForTimeout(500);
   if (lateForm) {
     const early = await page.evaluate(() => document.documentElement.dataset.tsmPage || "none");

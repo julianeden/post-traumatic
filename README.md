@@ -151,7 +151,7 @@ test/render.mjs   renders saved pages at phone width and checks the result
 ```sh
 npm install
 npm run lint
-npm run build      # dist/traumasoft_mobile_schedule-<version>.zip
+npm run build      # dist/traumasoft_mobile_schedule-<version>.zip and userscript/traumasoft-mobile.user.js
 ```
 
 ## Test
@@ -188,6 +188,31 @@ four buttons with working menus and the rest of the header hidden, and that
 the form pages fit the phone with full-width controls and an odometer field
 that keeps no upper limit even after a shift change. Screenshots of every state
 land in `test/out/`.
+
+## iPhone: the userscript build
+
+Firefox on iOS cannot run add-ons, so the same code also ships as a single
+userscript, `userscript/traumasoft-mobile.user.js`, built by
+`npm run build:userscript` from `src/content.css` and `src/content.js`
+(the script injects the stylesheet itself). It is committed so the raw
+GitHub URL in its `@updateURL` stays stable.
+
+To install on an iPhone:
+
+1. Install the free **Userscripts** app from the App Store.
+2. Settings → Safari → Extensions → Userscripts: turn it on and allow it on
+   `traumasoft.com` (or all websites).
+3. In Safari, open the script's raw URL
+   (`https://raw.githubusercontent.com/julianeden/traumasoft-mobile/main/userscript/traumasoft-mobile.user.js`),
+   tap the Userscripts icon in the address bar, and tap Install.
+4. Open the Traumasoft site; the restyle is on.
+
+Updates are not automatic: tapping the Userscripts icon on the site and
+choosing update, or re-opening the raw URL, picks up a newer version.
+
+The test harness runs the bundle the same way it runs the add-on
+(`npm run test:userscript`), and in Safari's engine with
+`TSM_BROWSER=webkit` after `npx playwright-core install webkit`.
 
 ## Distribution
 

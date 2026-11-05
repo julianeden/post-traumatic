@@ -5,12 +5,15 @@
   "description": "Firefox add-on that restyles the Traumasoft schedule calendar for phones.",
   "scripts": {
     "lint": "web-ext lint --source-dir src",
-    "build": "web-ext build --source-dir src --artifacts-dir dist --overwrite-dest",
+    "build": "web-ext build --source-dir src --artifacts-dir dist --overwrite-dest && node build/userscript.mjs",
     "sign": "web-ext sign --source-dir src --artifacts-dir dist --channel unlisted",
     "sign:listed": "web-ext sign --source-dir src --artifacts-dir dist --channel listed --amo-metadata amo-metadata.json",
     "run:desktop": "web-ext run --source-dir src --pref general.useragent.override='Mozilla/5.0 (Android 15; Mobile; rv:143.0) Gecko/143.0 Firefox/143.0'",
     "run:android": "web-ext run --source-dir src --target firefox-android --firefox-apk org.mozilla.firefox",
-    "test": "node test/render.mjs"
+    "test": "node test/render.mjs",
+    "build:userscript": "node build/userscript.mjs",
+    "test:userscript": "TSM_USERSCRIPT=1 node test/render.mjs",
+    "test:webkit": "TSM_BROWSER=webkit node test/render.mjs"
   },
   "devDependencies": {
     "playwright-core": "1.62.1",
