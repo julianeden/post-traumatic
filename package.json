@@ -12,6 +12,7 @@
     "run:android": "web-ext run --source-dir src --target firefox-android --firefox-apk org.mozilla.firefox",
     "test": "node test/render.mjs",
     "build:userscript": "node build/userscript.mjs",
+    "gist": "gh gist edit ded7365e07fe74e89676e93bc5901c66 -f traumasoft-mobile.user.js userscript/post-traumatic.user.js",
     "test:userscript": "TSM_USERSCRIPT=1 node test/render.mjs",
     "test:webkit": "TSM_BROWSER=webkit node test/render.mjs"
   },

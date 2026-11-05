@@ -9,8 +9,8 @@
 // @inject-into  content
 // @noframes
 // @grant        none
-// @updateURL    https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js
-// @downloadURL  https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js
+// @updateURL    https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js
+// @downloadURL  https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js
 // @license      MIT
 // ==/UserScript==
 

@@ -9,7 +9,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const manifest = JSON.parse(readFileSync(join(root, "src", "manifest.json"), "utf8"));
 const css = readFileSync(join(root, "src", "content.css"), "utf8");
 const js = readFileSync(join(root, "src", "content.js"), "utf8");
-const RAW = "https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/post-traumatic.user.js";
+const RAW = "https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js";
 
 const header = `// ==UserScript==
 // @name         ${manifest.name}
