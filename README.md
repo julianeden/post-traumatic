@@ -194,7 +194,7 @@ land in `test/out/`.
 Firefox on iOS cannot run add-ons, so the same code also ships as a single
 userscript, `userscript/traumasoft-mobile.user.js`, built by
 `npm run build:userscript` from `src/content.css` and `src/content.js`
-(the script injects the stylesheet itself). It is committed so the raw
+(the script injects the stylesheet itself). It is committed, and published as a public gist (updated with `gh gist edit` on each release) so the raw
 GitHub URL in its `@updateURL` stays stable.
 
 To install on an iPhone:
@@ -203,7 +203,7 @@ To install on an iPhone:
 2. Settings → Safari → Extensions → Userscripts: turn it on and allow it on
    `traumasoft.com` (or all websites).
 3. In Safari, open the script's raw URL
-   (`https://raw.githubusercontent.com/julianeden/traumasoft-mobile/main/userscript/traumasoft-mobile.user.js`),
+   (`https://gist.githubusercontent.com/julianeden/ded7365e07fe74e89676e93bc5901c66/raw/traumasoft-mobile.user.js`),
    tap the Userscripts icon in the address bar, and tap Install.
 4. Open the Traumasoft site; the restyle is on.
 
