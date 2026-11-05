@@ -3,7 +3,7 @@
 Phone widths only (820px and under), except the login username.
 
 - **Top bar** on every page: calendar, work orders, checklists, punch clock. Alerts moves into the menu; logo, search, chat and the rest are hidden.
-- **Login** remembers your username, never the password.
+- **Login** remembers your username.
 - **Schedule** is split into Schedule and More Options tabs.
 - **Your month** is a day-by-day agenda with a Today button. Each shift shows your partner or an open seat, with a "See spares" list.
 - **Unit views** (BLS, ALS, Details) show one day at a time, with open-shift counts per day, All / Open only / Mine filters, Find a person and a per-person calendar.
