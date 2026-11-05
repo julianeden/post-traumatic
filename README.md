@@ -19,4 +19,6 @@ To update later, repeat step 3.
 
 Talk to Julian Eden on Blink if you encounter any issues.
 
+Shareable copy of these instructions: https://tinyurl.com/post-traumatic-install-guide
+
 Full list of changes: [CHANGES.md](CHANGES.md). Build, test and release notes: [DEVELOPMENT.md](DEVELOPMENT.md).
