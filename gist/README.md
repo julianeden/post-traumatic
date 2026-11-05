@@ -12,7 +12,7 @@ To update later, open that link again and tap Install.
 
 ## Android (Firefox)
 
-1. In Firefox, open https://addons.mozilla.org/firefox/addon/91b1f18c1c554a43bf15/
+1. In Firefox, open https://addons.mozilla.org/firefox/addon/post-traumatic/
 2. Tap **Add to Firefox**, then **Add**. Updates are automatic.
 
 Talk to Julian Eden on Blink if you encounter any issues.
