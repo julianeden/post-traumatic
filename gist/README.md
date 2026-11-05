@@ -4,7 +4,7 @@ A mod to make Traumasoft mobile-friendly. Works with Safari on iPhone or Firefox
 
 ## iPhone / iPad (Safari)
 
-1. Install the free **Userscripts** app from the App Store.
+1. Install the free **Userscripts** app from the App Store and open it once so it sets itself up. You can close it right after.
 2. In the Settings app go to **Apps → Safari → Extensions → Userscripts** (on older iOS, **Settings → Safari → Extensions**). Turn it on and set **All Websites** to **Allow**. If Safari asks later, choose **Always Allow**, not one day.
 3. In Safari, open https://tinyurl.com/post-traumatic. Tap **aA** in the address bar (iPhone) or the puzzle-piece icon (iPad), tap **Userscripts**, then **Install**.
 4. (*Optional, for faster access*) To get a home screen icon that opens the schedule: open the **Shortcuts** app, tap **+**, tap **Add Action**, search for **Open URLs** and pick it, tap the URL field and enter `https://armstrong.traumasoft.com/main.php?a=user:schedule`, then tap the **ⓘ** at the bottom and choose **Add to Home Screen**. (Safari's own Add to Home Screen doesn't work here: icons made that way open the site without the mod.)
