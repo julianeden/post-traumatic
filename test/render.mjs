@@ -131,8 +131,40 @@ async function checkFormPage(page, name, after) {
   console.log(`  ${st.mode} page: ${st.fields} fields full width, ${st.ticks} tick boxes, submit ${st.submit.join("/")}px`);
   if (st.odo) {
     if (/max\[/.test(st.odo.cls) || st.odo.max !== null) fail(`odometer still limited: ${st.odo.cls} max=${st.odo.max}`);
-    if (!/custom\[number\]/.test(st.odo.cls) || /custom\[integer\]/.test(st.odo.cls)) fail(`odometer rejects decimals: ${st.odo.cls}`);
+    if (!/custom\[integer\]/.test(st.odo.cls) || !/min\[/.test(st.odo.cls)) fail(`odometer lost the site's integer or minimum rule: ${st.odo.cls}`);
     if (st.odo.inputmode !== "decimal") fail("odometer has no decimal keyboard hint");
+    // a reading typed with tenths is sent as whole miles
+    const miles = await page.evaluate(() => {
+      const odo = document.getElementById("formbuilder_rigcheck_odometer");
+      const out = {};
+      odo.value = "143,800.7";
+      odo.dispatchEvent(new Event("change", { bubbles: true }));
+      out.afterChange = odo.value;
+      odo.value = "143801.2";
+      odo.form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      out.afterSubmit = odo.value;
+      odo.value = "143802";
+      odo.dispatchEvent(new Event("change", { bubbles: true }));
+      out.wholeKept = odo.value;
+      odo.value = "";
+      return out;
+    });
+    if (miles.afterChange !== "143800" || miles.afterSubmit !== "143801" || miles.wholeKept !== "143802") fail(`odometer tenths not cut to whole miles: ${JSON.stringify(miles)}`);
+    console.log(`  odometer: 143,800.7 → ${miles.afterChange} on change, 143801.2 → ${miles.afterSubmit} on submit, whole readings untouched`);
+    // the way a person does it: type tenths, tab out, and the site's validator
+    // (which runs on blur) must see whole miles and raise no prompt
+    const odoField = page.locator("#formbuilder_rigcheck_odometer");
+    await odoField.fill("143900.4");
+    await page.keyboard.press("Tab");
+    await page.waitForTimeout(400);
+    const typed = await page.evaluate(() => ({
+      value: document.getElementById("formbuilder_rigcheck_odometer").value,
+      prompts: [...document.querySelectorAll(".formError")].filter((e) => e.offsetParent).map((e) => e.textContent.trim()),
+      validatorPresent: typeof window.jQuery?.fn?.validationEngine === "function",
+    }));
+    if (typed.value !== "143900" || typed.prompts.length) fail(`typing tenths and tabbing out: value ${typed.value}, prompts ${JSON.stringify(typed.prompts)}`);
+    console.log(`  odometer typed as 143900.4 then tab: value ${typed.value}, no error prompt${typed.validatorPresent ? " (site validator active)" : " (site validator not loaded here)"}`);
+    await odoField.fill("");
     // the site re-applies its rules when the shift changes
     const again = await page.evaluate(async () => {
       const sel = document.getElementById("formbuilder_rigcheck_shift");
@@ -142,7 +174,7 @@ async function checkFormPage(page, name, after) {
       await new Promise((r) => setTimeout(r, 150));
       return document.getElementById("formbuilder_rigcheck_odometer").className;
     });
-    if (/max\[|custom\[integer\]/.test(again)) fail(`odometer limit came back after a shift change: ${again}`);
+    if (/max\[/.test(again)) fail(`odometer limit came back after a shift change: ${again}`);
     console.log(`  odometer rules: ${st.odo.cls} → after shift change: ${again}`);
   }
   await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
@@ -384,13 +416,33 @@ for (const file of pages) {
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const blocked = new Set();
   await serveFixtures(context, blocked);
+  // A saved page already holds its built jqGrid; the site's script would build
+  // it again on load and empty it, so a second build of a built table is skipped.
+  await context.addInitScript(() => {
+    let jq;
+    const hook = (v) => {
+      jq = v;
+      if (!v || !v.fn || v.fn.__tsmGridHooked) return;
+      let real = v.fn.jqGrid;
+      Object.defineProperty(v.fn, "jqGrid", {
+        configurable: true,
+        get: () => real && function (opts) { return typeof opts === "object" && this[0]?.classList.contains("ui-jqgrid-btable") ? this : real.apply(this, arguments); },
+        set: (f) => { real = f; },
+      });
+      v.fn.__tsmGridHooked = true;
+    };
+    for (const name of ["jQuery", "$"]) Object.defineProperty(window, name, { configurable: true, get: () => jq, set: hook });
+  });
   const page = await context.newPage();
   page.on("dialog", (d) => d.dismiss());
   page.on("console", (msg) => {
     const text = msg.text();
     if (text.includes("[Post-Traumatic]")) console.log(`  console: ${text.replace("[Post-Traumatic] ", "")}`);
   });
-  await page.goto(`${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}`, { waitUntil: "load", timeout: 60_000 });
+  // The Dispatch view is told apart by the template id its dropdown option
+  // carries; naming it in the address makes a saved unit view count as Dispatch.
+  const dispatchId = /template_id=(\d+)[^>]*>[^<]*Dispatch/.exec(readFileSync(join(fixtures, file), "utf8"))?.[1];
+  await page.goto(`${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}${dispatchId ? `&template_id=${dispatchId}` : ""}`, { waitUntil: "load", timeout: 60_000 });
 
   const before = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -425,6 +477,26 @@ for (const file of pages) {
     return true;
   });
 
+  // A unit view gets a "today" (its second day) and a clock reading 06:00, so
+  // the on-now marks can be checked against the saved shifts.
+  const onNowSetup = await page.evaluate(() => {
+    if (!document.querySelector("table.month div.location")) return null;
+    const days = [...document.querySelectorAll('table.month td[id^="day_"]')];
+    if (days.length < 2) return null;
+    for (const td of days) td.classList.remove("today");
+    days[1].classList.add("today");
+    // two headings worded the way the Dispatch view words them (typo and all)
+    const heads = days[1].querySelectorAll("div.location");
+    if (heads[0]) heads[0].textContent = "Commincation Supervisor (Commincation Supervisor)";
+    if (heads[1]) heads[1].textContent = "Communications-Night (Communications-Night)";
+    const six = new Date(); six.setHours(6, 0, 0, 0);
+    const s = document.createElement("script"); s.textContent = `/* harness clock */ moment.unix(${Math.floor(six.getTime() / 1000)})`;
+    document.body.append(s);
+    const range = (text) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?m?\s*[-–]\s*(\d{1,2}):(\d{2})\s*([ap])?m?/i.exec(text || ""); if (!m) return null; const mins = (h, mi, ap) => ((ap ? (Number(h) % 12) + (ap.toLowerCase() === "p" ? 12 : 0) : Number(h)) * 60 + Number(mi)); const start = mins(m[1], m[2], m[3]); let end = mins(m[4], m[5], m[6]); if (end <= start) end += 1440; return { start, end }; };
+    const rows = (td, at) => [...td.querySelectorAll("tr.employee")].filter((tr) => { const rg = range(tr.querySelector("td.timerange")?.textContent); return rg && rg.start <= at && at < rg.end; }).map((tr) => { tr.dataset.expectOnNow = "1"; return tr.querySelector("td.timerange").textContent.trim(); });
+    return { today: rows(days[1], 360), yesterday: rows(days[0], 360 + 1440) };
+  });
+
   await inject(page);
   await page.waitForTimeout(500);
   if (lateForm) {
@@ -435,13 +507,55 @@ for (const file of pages) {
     console.log("  fleet form injected 500 ms after the script ran");
   }
 
+  // A page that opens on More Options (a management form served inline) is
+  // checked as it landed, then parked on the Schedule tab for the shared checks.
+  const landing = await page.evaluate(() => {
+    const vis = (el) => el.offsetParent !== null;
+    const active = document.querySelector(".tsm-active");
+    return {
+      sub: document.documentElement.dataset.tsmView === "sub",
+      tab: document.documentElement.dataset.tsmTab,
+      subCount: document.querySelectorAll(".tsm-subpage").length,
+      subShown: [...document.querySelectorAll(".tsm-subpage")].filter(vis).length,
+      active: active?.querySelector("td.std_header")?.textContent.trim() || "",
+      activeTop: active ? Math.round(active.getBoundingClientRect().top) : null,
+      calendarShown: document.querySelector("table.month") ? vis(document.querySelector("table.month")) : false,
+      scrollWidth: document.documentElement.scrollWidth,
+      cards: document.querySelectorAll("table.tsm-cards > tbody > tr:not(.tsm-cards-head):not(.tsm-cards-caption):not(.tsm-cards-span)").length,
+      uncaptioned: document.querySelectorAll("table.tsm-cards > tbody > tr:not(.tsm-cards-head):not(.tsm-cards-caption):not(.tsm-cards-span) > td:not([data-label]):not(.tsm-cards-action):not(.tsm-empty)").length,
+      tabsShown: document.querySelector(".tsm-tabs") ? vis(document.querySelector(".tsm-tabs")) : false,
+      backShown: document.querySelector(".tsm-back") ? vis(document.querySelector(".tsm-back")) : false,
+      othersShown: [...document.querySelectorAll(".tsm-more:not(.tsm-active):not(.tsm-subpage)")].filter(vis).length,
+      title: document.querySelector(".tsm-subbar-title")?.textContent || "",
+    };
+  });
+  if (landing.sub) {
+    await page.screenshot({ path: join(outDir, `${name}-landing.png`) });
+    await page.screenshot({ path: join(outDir, `${name}-more-options.png`), fullPage: true });
+    // scrolled down, the bar stays under the site header; Back restores the list
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await page.waitForTimeout(100);
+    landing.scrolled = await page.evaluate(() => ({ y: Math.round(scrollY), barTop: Math.round(document.querySelector(".tsm-subbar")?.getBoundingClientRect().top ?? -1) }));
+    await page.screenshot({ path: join(outDir, `${name}-landing-scrolled.png`) });
+    await page.locator(".tsm-back").click();
+    await page.waitForTimeout(150);
+    landing.afterBack = await page.evaluate(() => {
+      const vis = (el) => el && el.offsetParent !== null;
+      return { view: document.documentElement.dataset.tsmView, tab: document.documentElement.dataset.tsmTab, y: Math.round(scrollY), tabsShown: vis(document.querySelector(".tsm-tabs")), barShown: vis(document.querySelector(".tsm-subbar")), subShown: [...document.querySelectorAll(".tsm-subpage")].filter(vis).length, links: [...document.querySelectorAll("td.indent > a")].filter(vis).length };
+    });
+    await page.locator(".tsm-tab", { hasText: "Schedule" }).click();
+    await page.waitForTimeout(150);
+  }
+
   const after = await page.evaluate(() => {
     const html = document.documentElement;
     // Anything inside a fixed element (the site's header) cannot scroll the page.
     const inFixed = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === "fixed") return true; return false; };
+    // ...and a region that scrolls sideways on purpose keeps its contents off the page width.
+    const inScroller = (el) => { for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) if (/auto|scroll/.test(getComputedStyle(n).overflowX)) return true; return false; };
     const wide = [...document.querySelectorAll("body *")].filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.right > innerWidth + 1 && !inFixed(el);
+      return r.width > 0 && r.right > innerWidth + 1 && !inFixed(el) && !inScroller(el);
     });
     return {
       active: html.dataset.tsmReady === "1",
@@ -460,10 +574,13 @@ for (const file of pages) {
       // every bar item left to right: x range and height
       barItems: [document.querySelector('button[title="All Menus"]'), ...document.querySelectorAll("#tsm-topnav .tsm-topbtn")]
         .filter((e) => e && e.offsetParent).map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.height)]; }),
+      footerShown: Boolean(document.getElementById("footer")?.offsetParent),
       punchPage: Boolean(document.getElementById("punchin_form")),
       formPage: html.dataset.tsmPage === "form" || html.dataset.tsmPage === "fleet",
     };
   });
+  if (after.active && after.footerShown) fail("the copyright footer is still shown");
+
   if (after.hasHeader) {
     const labels = after.nav.map((b) => b.label);
     if (JSON.stringify(labels) !== JSON.stringify(["Schedule", "Work orders", "Checklists", "Punch Clock"])) fail(`top bar buttons are ${labels.join(", ")}`);
@@ -556,6 +673,58 @@ for (const file of pages) {
       if (after.chips !== before.days) fail(`expected ${before.days} day chips, got ${after.chips}`);
     }
     if (after.mode === "agenda" && after.visibleDays !== before.days) fail(`agenda should show all ${before.days} days, shows ${after.visibleDays}`);
+  }
+
+  // Unit headings that repeat the name in parentheses show it once.
+  if (after.mode === "location") {
+    // only the day on screen: hidden text reads as shown elsewhere
+    const headings = await page.evaluate(() => [...document.querySelectorAll("table.month td.tsm-selected .tsm-unit div.location")].map((h) => ({ full: h.dataset.tsmFull || h.textContent.trim().replace(/\s+/g, " "), shown: h.innerText.trim().replace(/\s+/g, " ") })));
+    const comm = (h) => /^comm/i.test(h.full);
+    const repeated = headings.filter((h) => /^(.*?) \(\1\)$/.test(h.full) && !comm(h));
+    const bad = repeated.filter((h) => h.shown !== h.full.replace(/ \(.*\)$/, ""));
+    if (bad.length) fail(`unit headings still repeat the name: ${bad.slice(0, 3).map((h) => h.shown).join(", ")}`);
+    const kept = headings.filter((h) => !/^(.*?) \(\1\)$/.test(h.full) && !comm(h) && h.shown !== h.full);
+    if (kept.length) fail(`unit headings lost text: ${kept.slice(0, 3).map((h) => `${h.full} → ${h.shown}`).join(", ")}`);
+    const dispatchHeads = headings.filter(comm).map((h) => h.shown);
+    if (onNowSetup && JSON.stringify(dispatchHeads) !== JSON.stringify(["Supervisor", "Night"])) fail(`Dispatch headings read ${JSON.stringify(dispatchHeads)}, expected Supervisor and Night`);
+    console.log(`  unit headings: ${repeated.length} of ${headings.length} repeated their name and show it once (e.g. ${repeated[0]?.shown || "none"}); Dispatch wording → ${dispatchHeads.join(", ")}`);
+  }
+
+  // Dispatch view: exactly the saved shifts that contain 06:00 are marked on
+  // now, including last night's that run past midnight, which today notes.
+  if (onNowSetup && after.mode === "location") {
+    const marks = await page.evaluate(() => ({
+      marked: document.querySelectorAll("tr.tsm-on-now").length,
+      expected: document.querySelectorAll("tr[data-expect-on-now]").length,
+      wrong: [...document.querySelectorAll("tr.tsm-on-now")].filter((tr) => !tr.dataset.expectOnNow).length,
+      missed: [...document.querySelectorAll("tr[data-expect-on-now]")].filter((tr) => !tr.classList.contains("tsm-on-now")).length,
+      note: document.querySelector(".tsm-on-now-note")?.textContent.trim() || "",
+      noteShown: Boolean(document.querySelector(".tsm-on-now-note")?.offsetParent),
+      badgeShown: [...document.querySelectorAll("tr.tsm-on-now")].some((tr) => tr.offsetParent !== null),
+    }));
+    if (marks.wrong || marks.missed) fail(`on-now marks: ${marks.marked} marked, ${marks.expected} expected, ${marks.wrong} wrong, ${marks.missed} missed`);
+    if (onNowSetup.yesterday.length ? !marks.noteShown : marks.note) fail(`on-now note: ${JSON.stringify(marks.note)} with ${onNowSetup.yesterday.length} overnight shift(s)`);
+    if (marks.marked && !marks.badgeShown) fail("on-now rows are all hidden");
+    console.log(`  on now at 06:00: ${onNowSetup.today.length} shift(s) today (${onNowSetup.today.slice(0, 3).join(", ")}) + ${onNowSetup.yesterday.length} since yesterday (${onNowSetup.yesterday.slice(0, 3).join(", ")}); note: ${marks.note.slice(0, 60) || "none"}`);
+    await page.screenshot({ path: join(outDir, `${name}-on-now.png`) });
+    const unitOnNow = page.locator("table.month td.today .tsm-unit-on-now").first();
+    if (await unitOnNow.count()) await unitOnNow.screenshot({ path: join(outDir, `${name}-on-now-row.png`) });
+    await page.evaluate(() => window.scrollTo(0, 0));
+  }
+
+  // The Today button lands today's row just under the fixed site header.
+  if (after.mode === "agenda" && await page.locator(".tsm-fab").count()) {
+    await page.locator(".tsm-fab").click();
+    await page.waitForTimeout(900);
+    const today = await page.evaluate(() => {
+      const td = document.querySelector("table.month td.today");
+      const header = document.getElementById("ts_menus_menu_div")?.closest("[style*='fixed'], header, div") || null;
+      return { top: Math.round(td.getBoundingClientRect().top), scrollY: Math.round(scrollY), maxScroll: Math.round(document.documentElement.scrollHeight - innerHeight) };
+    });
+    // it may not get all the way there on a short month, in which case the page is at the bottom
+    if (!(today.top >= 48 && today.top <= 72) && today.scrollY < today.maxScroll - 1) fail(`Today button put today's row at ${today.top}px (header ends at 48px)`);
+    console.log(`  Today button: today's row at ${today.top}px`);
+    await page.evaluate(() => window.scrollTo(0, 0));
   }
 
   // View pickers and auto-submit. A submit listener swallows the navigation
@@ -726,9 +895,39 @@ for (const file of pages) {
         calendarShown: vis(document.querySelector("table.month")), toolbarShown: vis(document.querySelector(".tsm-viewpick")),
         mySchedHeader: [...document.querySelectorAll("td.std_header")].filter((h) => /my\s*schedule/i.test(h.textContent) && vis(h)).length,
         scrollWidth: document.documentElement.scrollWidth,
+        subCount: document.querySelectorAll(".tsm-subpage").length,
+        subShown: [...document.querySelectorAll(".tsm-subpage")].filter(vis).length,
+        active: document.querySelector(".tsm-active td.std_header")?.textContent.trim() || "",
+        activeTop: Math.round(document.querySelector(".tsm-active")?.getBoundingClientRect().top ?? -1),
+        cards: document.querySelectorAll("table.tsm-cards > tbody > tr:not(.tsm-cards-head):not(.tsm-cards-caption):not(.tsm-cards-span)").length,
+        uncaptioned: [...document.querySelectorAll("table.tsm-cards > tbody > tr:not(.tsm-cards-head):not(.tsm-cards-caption):not(.tsm-cards-span) > td:not([data-label]):not(.tsm-cards-action):not(.tsm-empty)")].length,
       };
     });
     let t = await tabState();
+    if (landing.sub) {
+      const l = landing;
+      if (l.tab !== "more" || !l.active || l.subShown !== l.subCount || l.calendarShown) fail(`sub-page landing: ${JSON.stringify(l)}`);
+      if (l.activeTop === null || l.activeTop < 48 || l.activeTop > 220) fail(`sub-page section is not at the top (top ${l.activeTop})`);
+      if (l.tabsShown || !l.backShown || l.othersShown || !l.title) fail(`sub-page shows more than its form: ${JSON.stringify(l)}`);
+      if (l.scrolled.y > 0 && (l.scrolled.barTop < 46 || l.scrolled.barTop > 50)) fail(`back bar did not stay under the header when scrolled (top ${l.scrolled.barTop} at y ${l.scrolled.y})`);
+      const b = l.afterBack;
+      if (b.view !== "closed" || b.tab !== "more" || b.y !== 0 || !b.tabsShown || b.barShown || b.subShown || b.links < 5) fail(`Back did not restore More Options: ${JSON.stringify(b)}`);
+      if (l.scrollWidth > VIEWPORT.width) fail(`sub-page overflows on landing: ${l.scrollWidth}`);
+      if (l.uncaptioned) fail(`${l.uncaptioned} card cells have no caption`);
+      // parked on Schedule by now, which closed the form: the calendar shows
+      if (t.tab !== "schedule" || t.subShown || t.moreShown || !t.calendarShown) fail(`Schedule tab on a sub-page: ${JSON.stringify(t)}`);
+      // More Options is back to its plain list, with a link to reopen the form
+      await page.locator(".tsm-tab", { hasText: "More Options" }).click();
+      await page.waitForTimeout(150);
+      t = await tabState();
+      if (t.tab !== "more" || t.subShown || t.calendarShown || t.active) fail(`More Options after closing the form: ${JSON.stringify(t)}`);
+      if (t.linksShown < 5) fail(`More Options after closing shows ${t.linksShown} quick links, expected at least 5`);
+      if (t.scrollWidth > VIEWPORT.width) fail(`More Options overflows: ${t.scrollWidth}`);
+      await page.screenshot({ path: join(outDir, `${name}-more-options-closed.png`), fullPage: true });
+      await page.locator(".tsm-tab", { hasText: "Schedule" }).click();
+      await page.waitForTimeout(150);
+      console.log(`  sub-page: "${l.title}" alone under a back bar (${l.cards} cards; bar at ${l.scrolled.barTop}px when scrolled to ${l.scrolled.y}); Back restores More Options with ${l.afterBack.links} rows; a tab tap closes it too`);
+    } else {
     if (t.tab !== "schedule" || JSON.stringify(t.tabs) !== JSON.stringify([["Schedule", "true"], ["More Options", "false"]])) fail(`tabs: ${JSON.stringify(t)}`);
     if (t.moreCount < 5 || t.moreShown) fail(`Schedule tab: ${t.moreShown} of ${t.moreCount} admin sections visible`);
     if (t.linksShown || !t.calendarShown || !t.toolbarShown || t.mySchedHeader) fail(`Schedule tab content: ${JSON.stringify(t)}`);
@@ -738,12 +937,15 @@ for (const file of pages) {
     if (t.tab !== "more" || t.moreShown !== t.moreCount || t.calendarShown || t.toolbarShown) fail(`More Options tab: ${JSON.stringify(t)}`);
     if (t.linksShown < 5) fail(`More Options shows ${t.linksShown} quick links, expected at least 5`);
     if (t.scrollWidth > VIEWPORT.width) fail(`More Options overflows: ${t.scrollWidth}`);
+    const moreHeight = await page.evaluate(() => Math.round(document.body.getBoundingClientRect().bottom + scrollY));
+    console.log(`  More Options content height: ${moreHeight}px`);
     await page.screenshot({ path: join(outDir, `${name}-more-options.png`), fullPage: true });
     await page.locator(".tsm-tab", { hasText: "Schedule" }).click();
     await page.waitForTimeout(150);
     t = await tabState();
     if (t.tab !== "schedule" || t.moreShown || !t.calendarShown) fail("switching back to Schedule failed");
     console.log(`  tabs: Schedule default; More Options holds ${t.moreCount} sections with ${before.hasMonth ? "quick links" : ""} and nothing else`);
+    }
   }
 
   await page.screenshot({ path: join(outDir, `${name}-after-top.png`) });

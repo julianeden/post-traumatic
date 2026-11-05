@@ -11,7 +11,7 @@
   "version": {
     "license": "MIT",
     "release_notes": {
-      "en-US": "Renamed to Post-Traumatic. Schedule page split into Schedule and More Options tabs. Quick bar in the header (schedule, work orders, checklists, punch clock); work order forms and BLS/ALS checklists restyled for phones; odometer accepts any reading above the last. Header Punch button and a one-button punch clock page that asks before an early punch. Login page: the username you last signed in with is filled in. Individual Month View: each shift shows who is on the unit with you or that the seat is open, with a See spares list of others working those hours without a partner. Calendar button beside Find a person: a month grid of that person's shifts; tap a day for unit, hours and crewmates. View picker split into Common and Other; changing the view, month or year reloads immediately."
+      "en-US": "More Options: the Shift Substitutions, Shift Trades, Time Off and Pickup Shifts pages open on their own form, laid out as cards, under a Back button; the list itself is shorter and fits the screen without scrolling, and the copyright footer is gone. Dispatch view: positions are named Supervisor, Day, Eve, Night and Training, and whoever is on right now is marked, including last night's shift running past midnight. Today button lands on today instead of the day after. Checklist odometer: the upper limit stays off, and a reading typed with tenths is sent as whole miles, as the site expects."
     }
   }
 }

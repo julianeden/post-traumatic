@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Post-Traumatic",
-  "version": "1.4.2",
+  "version": "1.5.1",
   "description": "Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.",
   "icons": {
     "48": "icons/icon-48.png",

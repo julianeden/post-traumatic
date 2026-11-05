@@ -41,6 +41,14 @@ the username memory, and the punch clock page as `punchClockPage.html`.
 Save pages with the add-on disabled: a page saved while it was running
 already contains its markup and is skipped.
 
+The More Options sub-pages (follow Shift Substitutions, Shift Trades, Time
+Off and Pickup Shifts from the schedule) are the schedule page with that
+section's form served inline; save them as `shiftSubstitution.html`,
+`shiftTrade.html`, `timeOff.html` and `pickupShifts.html`. If they were saved
+with the add-on running, `node test/splice.mjs ~/Desktop/Schedule test/fixtures`
+rebuilds clean copies from the clean `Schedule.html` save (link the `*_files`
+folders into `test/fixtures` too).
+
 ```sh
 npm test
 TSM_FIXTURES=~/Desktop/Schedule npm test

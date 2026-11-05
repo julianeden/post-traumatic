@@ -78,14 +78,20 @@ html[data-tsm="on"] #user_content td.indent:has(> a) {
 
 html[data-tsm="on"] #user_content td.indent > a {
   display: block;
-  padding: 12px 14px;
-  margin: 4px 0;
+  padding: 10px 14px;
+  margin: 3px 0;
   background: #fff;
   border: 1px solid #dfe3e8;
   border-radius: 10px;
   color: #003060;
   font-weight: 600;
   text-decoration: none;
+}
+
+/* a heading over a single link is one row named after the heading */
+html[data-tsm="on"] table.tsm-row td.std_header,
+html[data-tsm="on"] table.tsm-row .tsm-row-original {
+  display: none;
 }
 
 html[data-tsm="on"] #user_content td.indent > a::after {
@@ -106,12 +112,75 @@ html[data-tsm="on"] td.data_field {
   padding: 0 0 0 6px !important;
 }
 
+/* the facts block: spacer rows dropped, tight lines, labels and values in
+   two snug columns with the empty columns taking the slack, and the
+   "View PTO Bank" link on the PTO heading line */
+html[data-tsm="on"] .tsm-facts .tsm-blank {
+  display: none !important;
+}
+
+html[data-tsm="on"] .tsm-facts td {
+  padding: 2px 0 !important;
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+html[data-tsm="on"] .tsm-facts td:first-child,
+html[data-tsm="on"] .tsm-facts td.data_field {
+  width: 1% !important;
+}
+
+html[data-tsm="on"] .tsm-facts td.data_field {
+  padding-left: 10px !important;
+}
+
+html[data-tsm="on"] .tsm-facts td.indent {
+  padding-left: 14px !important;
+}
+
+html[data-tsm="on"] .tsm-facts tr.tsm-facts-heading td {
+  padding-top: 8px !important;
+  font-weight: 700;
+  text-align: left !important;
+}
+
+html[data-tsm="on"] .tsm-facts a.tsm-facts-link {
+  float: right;
+  font-weight: 400;
+}
+
+html[data-tsm="on"] tr.tsm-more td.std_header {
+  padding-top: 4px !important;
+}
+
+html[data-tsm-tab="more"] #main-content {
+  padding-bottom: 12px !important;
+}
+
+/* the copyright footer takes a band of the screen on every page, and the
+   page background below the content matches the content */
+html[data-tsm-chrome="on"] #footer {
+  display: none !important;
+}
+
+html[data-tsm-chrome="on"],
+html[data-tsm-chrome="on"] body {
+  background: #f6f7f9 !important;
+}
+
+html[data-tsm-chrome="on"] #main-wrapper,
+html[data-tsm-chrome="on"] #main-content {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
 /* ---------- schedule page tabs: Schedule / More Options ---------- */
 
 html[data-tsm="on"] .tsm-tabs {
   display: flex;
   gap: 2px;
-  margin: 4px 0 12px;
+  margin: 4px 0 8px;
   padding: 3px;
   background: #e5e7eb;
   border-radius: 12px;
@@ -138,6 +207,282 @@ html[data-tsm-tab="schedule"] .tsm-more,
 html[data-tsm-tab="more"] .tsm-sched,
 html[data-tsm-tab="more"] .tsm-fab {
   display: none !important;
+}
+
+/* ---------- More Options: a management form served inline ---------- */
+
+html[data-tsm="on"] .tsm-subpage,
+html[data-tsm="on"] .tsm-subpage table[width] {
+  width: auto !important;
+  max-width: 100%;
+}
+
+html[data-tsm="on"] .tsm-subpage td,
+html[data-tsm="on"] .tsm-subpage th {
+  white-space: normal !important;
+}
+
+/* the site indents nested tables by a margin while keeping them full width */
+html[data-tsm="on"] .tsm-subpage .indent {
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* jqGrid boxes: fixed pixel sizes off, header hidden (its labels caption
+   the cards), the pager compact */
+html[data-tsm="on"] .tsm-grid .ui-jqgrid,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-view,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-bdiv,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-bdiv > div,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-pager,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-titlebar {
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-hdiv,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-resize-mark {
+  display: none !important;
+}
+
+html[data-tsm="on"] .tsm-grid .ui-jqgrid,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-view,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-bdiv,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-bdiv > div {
+  border: 0 !important;
+  background: none !important;
+}
+
+/* the grid's own sizing (1px body table, 22px clipped cells) off the cards */
+html[data-tsm="on"] .tsm-grid table.ui-jqgrid-btable {
+  width: auto !important;
+  height: auto !important;
+  table-layout: auto !important;
+}
+
+html[data-tsm="on"] .tsm-grid table.tsm-cards > tbody > tr > td {
+  height: auto !important;
+  overflow: visible !important;
+  white-space: normal !important;
+  line-height: 1.3 !important;
+}
+
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-titlebar {
+  padding: 8px 0 2px !important;
+  background: none !important;
+  border: 0 !important;
+  font: 700 14px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-pager {
+  padding: 4px 0 !important;
+  background: none !important;
+  border: 0 !important;
+  font-size: 13px;
+}
+
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-pager table.ui-pg-table td {
+  padding: 2px 4px !important;
+}
+
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-pager input,
+html[data-tsm="on"] .tsm-grid .ui-jqgrid-pager select {
+  min-height: 32px;
+  padding: 2px 6px;
+  font-size: 14px;
+}
+
+/* While a form is open only its section shows, under a bar with a back
+   button that stays put as the page scrolls; Back restores the full list. */
+html[data-tsm-view="sub"] .tsm-tabs,
+html[data-tsm-view="sub"] .tsm-more:not(.tsm-active):not(.tsm-subpage),
+html[data-tsm-view="sub"] .tsm-active td.std_header,
+html[data-tsm-view="closed"] .tsm-subbar {
+  display: none !important;
+}
+
+html[data-tsm="on"] .tsm-subbar {
+  position: sticky;
+  top: 48px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 -12px 10px;
+  padding: 8px 12px;
+  background: #f6f7f9;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+html[data-tsm="on"] .tsm-back {
+  flex: none;
+  padding: 8px 14px 8px 10px;
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  background: #fff;
+  color: #003060;
+  font: 700 14px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm="on"] .tsm-subbar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1f2937;
+  font: 700 15px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm-view="closed"] .tsm-subpage {
+  display: none !important;
+}
+
+html[data-tsm="on"] .tsm-active td.std_header {
+  color: #003060;
+}
+
+/* plain rows of a form (label, field) stack, with finger-sized controls */
+html[data-tsm="on"] .tsm-subpage:not(.tsm-grid) table:not(.tsm-cards) > tbody > tr {
+  display: block;
+}
+
+html[data-tsm="on"] .tsm-subpage:not(.tsm-grid) table:not(.tsm-cards) > tbody > tr > td {
+  display: block;
+  width: auto !important;
+  padding: 2px 0 !important;
+  text-align: left !important;
+}
+
+html[data-tsm="on"] .tsm-subpage input[type="text"],
+html[data-tsm="on"] .tsm-subpage textarea,
+html[data-tsm="on"] .tsm-subpage select {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 1px solid #c4c9d1;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 16px;
+}
+
+html[data-tsm="on"] .tsm-subpage input[type="text"],
+html[data-tsm="on"] .tsm-subpage textarea {
+  width: 100% !important;
+}
+
+html[data-tsm="on"] .tsm-subpage input.std_date {
+  width: calc(100% - 48px) !important;
+  vertical-align: middle;
+}
+
+html[data-tsm="on"] .tsm-subpage img.ui-datepicker-trigger {
+  vertical-align: middle;
+  margin-left: 10px;
+}
+
+html[data-tsm="on"] .tsm-subpage input[type="submit"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 10px 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #003060;
+  color: #fff;
+  font: 700 16px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm="on"] table.tsm-cards,
+html[data-tsm="on"] table.tsm-cards > tbody {
+  display: block;
+  width: auto !important;
+}
+
+html[data-tsm="on"] table.tsm-cards > tbody > tr {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 12px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+html[data-tsm="on"] table.tsm-cards > tbody > tr.tsm-cards-head {
+  display: none;
+}
+
+html[data-tsm="on"] table.tsm-cards > tbody > tr.tsm-cards-caption,
+html[data-tsm="on"] table.tsm-cards > tbody > tr.tsm-cards-span {
+  display: block;
+  margin: 10px 0 2px;
+  padding: 0;
+  background: none;
+  border: 0;
+  font-weight: 700;
+}
+
+html[data-tsm="on"] table.tsm-cards > tbody > tr > td {
+  display: block;
+  padding: 0 !important;
+  border: 0 !important;
+  font-size: 14px;
+  line-height: 1.3;
+  color: #111827;
+  white-space: normal !important;
+}
+
+html[data-tsm="on"] table.tsm-cards > tbody > tr.tsm-cards-blank {
+  display: none;
+}
+
+html[data-tsm="on"] table.tsm-cards td.tsm-cards-wide {
+  grid-column: 1 / -1;
+}
+
+html[data-tsm="on"] table.tsm-cards td[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+html[data-tsm="on"] .tsm-subpage td.tsm-empty,
+html[data-tsm="on"] table.tsm-cards td.tsm-empty {
+  display: none !important;
+}
+
+html[data-tsm="on"] table.tsm-cards td.tsm-cards-action {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+html[data-tsm="on"] table.tsm-cards td.tsm-cards-action a,
+html[data-tsm="on"] table.tsm-cards td.tsm-cards-action input[type="button"],
+html[data-tsm="on"] table.tsm-cards td.tsm-cards-action input[type="submit"] {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #003060;
+  border-radius: 8px;
+  background: #fff;
+  color: #003060 !important;
+  font: 700 14px system-ui, -apple-system, Roboto, sans-serif;
+  text-align: center;
+  text-decoration: none !important;
+}
+
+html[data-tsm="on"] table.tsm-cards td select {
+  max-width: 100%;
+  font-size: 14px;
 }
 
 /* ---------- toolbar: view, legend, month/year ---------- */
@@ -356,6 +701,12 @@ html[data-tsm-mode="agenda"] td[id^="day_"] {
   align-items: start;
   padding: 8px 0 8px 4px !important;
   border-top: 1px solid #e5e7eb !important;
+}
+
+/* the Today button scrolls this row to the top; keep it clear of the
+   fixed site header */
+html[data-tsm-mode="agenda"] td.today {
+  scroll-margin-top: 56px;
 }
 
 html[data-tsm-mode="agenda"] .tsm-today .tsm-daynum {
@@ -1340,6 +1691,43 @@ html[data-tsm-mode="location"] tr.unassigned-unavailable span.hightlight::after 
   font-weight: 400;
 }
 
+/* Dispatch view: who is on now */
+html[data-tsm-mode="location"] tr.tsm-on-now > td:first-child::after,
+html[data-tsm-mode="location"] .tsm-on-now-badge {
+  content: "on now";
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #1a8f4a;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+html[data-tsm-mode="location"] .tsm-on-now-badge {
+  margin: 0 6px 0 0;
+}
+
+html[data-tsm-mode="location"] .tsm-on-now-note {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #e7f6ec;
+  color: #14532d;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+html[data-tsm-mode="location"] .tsm-on-now-line {
+  margin-top: 4px;
+  padding-left: 4px;
+  font-weight: 600;
+}
+
 html[data-tsm-filter="open"] .tsm-unit:not(.tsm-has-open) {
   display: none !important;
 }
@@ -1414,7 +1802,7 @@ html[data-tsm="on"] #confirm_dialog_form a.commands {
   text-decoration: none;
 }
 
-html[data-tsm="on"] .ui-widget-overlay {
+html[data-tsm="on"] .ui-widget-overlay:not(.jqgrid-overlay) {
   position: fixed !important;
   inset: 0;
   width: auto !important;

@@ -145,7 +145,7 @@
 
     decorateToolbar();
     buildTabs();
-    decorateDays(month, days, isLocation);
+    decorateDays(month, days, isLocation, isLocation && isDispatchView());
 
     if (isLocation) {
       html.dataset.tsmMode = "location";
@@ -156,6 +156,7 @@
         diag.log(`signed-in name: ${name}`);
         pager.setUser(name);
       });
+      if (isDispatchView()) markOnNow(days);
     } else {
       html.dataset.tsmMode = "agenda";
       addTodayButton(month);
@@ -339,8 +340,7 @@
   // ---- form pages: work orders and checklists ------------------------------
 
   // Formbuilder pages (work orders, checklists) are floated fixed-width boxes;
-  // the stylesheet stacks them. The checklist odometer loses its upper limit
-  // and accepts decimals.
+  // the stylesheet stacks them. The checklist odometer loses its upper limit.
   function initFormPage() {
     html.dataset.tsm = "on";
     html.dataset.tsmPage = "form";
@@ -385,19 +385,36 @@
   }
 
   // The site re-applies validate[required,custom[integer],min[..],max[..]]
-  // on load and on every shift change; strip the max and allow decimals
-  // each time it does.
+  // on load and on every shift change; strip the max each time it does. The
+  // integer rule stays: the site stores whole miles, so a reading typed with
+  // tenths (what the dash shows) is cut to whole miles before it is checked
+  // and sent.
   function fixOdometer() {
     const input = document.getElementById("formbuilder_rigcheck_odometer");
     if (!input) return;
     input.setAttribute("inputmode", "decimal");
     const relax = () => {
-      const fixed = input.className.replace(/,?\s*max\[[^\]]*\]/, "").replace(/custom\[integer\]/, "custom[number]");
+      const fixed = input.className.replace(/,?\s*max\[[^\]]*\]/, "");
       if (fixed !== input.className) input.className = fixed;
       if (input.hasAttribute("max")) input.removeAttribute("max");
     };
     relax();
     new MutationObserver(relax).observe(input, { attributes: true, attributeFilter: ["class", "max"] });
+    const wholeMiles = () => {
+      const typed = input.value.trim().replace(/,/g, "");
+      const n = Number(typed);
+      if (!typed || !Number.isFinite(n) || !/[.]/.test(typed)) return;
+      input.value = String(Math.trunc(n));
+      diag.log(`odometer ${typed} sent as ${input.value}`);
+    };
+    input.addEventListener("change", wholeMiles);
+    const form = input.form;
+    if (form) {
+      form.addEventListener("submit", wholeMiles, true);
+      form.addEventListener("click", (e) => {
+        if (e.target.closest("input[type=submit], button[type=submit], input[type=image]")) wholeMiles();
+      }, true);
+    }
   }
 
   function initFleetPage() {
@@ -704,14 +721,27 @@
   // The page stacks its admin sections (status, PTO, availability, shift
   // substitutions, trades, time off, pickups) above the calendar. Split them
   // into a "More Options" tab and keep the schedule as the default tab.
+  // Following a section's link serves its management form inline, right
+  // under that section; the page then shows only that section and its form
+  // under a bar with a back button (content.css hides the rest; nothing
+  // moves in the DOM).
   function buildTabs() {
     const toolbarTable = document.querySelector("table:has(> tbody > tr.tsm-toolbar)");
     const userContent = document.getElementById("user_content");
     if (!toolbarTable || !userContent) return;
     const cell = toolbarTable.parentElement;
+    const subpage = [];
     for (const child of cell.children) {
-      if (child === toolbarTable) child.classList.add("tsm-sched");
-      else if (child.tagName === "TABLE") child.classList.add(/^\s*my\s*schedule\s*$/i.test(child.textContent) ? "tsm-hide" : "tsm-more");
+      if (child === toolbarTable) {
+        child.classList.add("tsm-sched");
+      } else if (child.tagName === "TABLE" && /^\s*my\s*schedule\s*$/i.test(child.textContent)) {
+        child.classList.add("tsm-hide");
+      } else if (child.tagName === "FORM" || (child.tagName === "DIV" && child.textContent.trim())) {
+        child.classList.add("tsm-more");
+        subpage.push(child);
+      } else if (child.tagName === "TABLE") {
+        child.classList.add("tsm-more");
+      }
     }
     const row = cell.closest("tr");
     if (row) {
@@ -719,6 +749,8 @@
         if (sibling !== row) sibling.classList.add("tsm-more");
       }
     }
+    for (const table of userContent.querySelectorAll(".tsm-more table, table.tsm-more")) compactSection(table);
+    compactFacts(userContent);
 
     const tabs = el("div", "tsm-tabs");
     tabs.setAttribute("role", "tablist");
@@ -733,12 +765,183 @@
       tabs.append(b);
       return b;
     });
+    let section = null;
+    // Either tab puts More Options back to its plain list: the form closes,
+    // its section returns to its place and gets a link to reopen it.
+    const closeSubpage = () => {
+      html.dataset.tsmView = "closed";
+      if (!section) return;
+      section.classList.remove("tsm-active");
+      const id = subpage.map((e) => e.id).find(Boolean) || "";
+      const label = id.startsWith("shift_substitution") ? "Click Here to Manage your Shift Substitutions"
+        : id.startsWith("shift_trade") ? "Click Here to Manage your Shift Trade(s)"
+        : id.startsWith("timeoff") ? "Click Here to Manage your Request(s) for Time Off"
+        : id.startsWith("open_shift") ? "Click Here to View Open Shifts"
+        : "Open";
+      const row = section.querySelector("tbody")?.insertRow();
+      if (!row) return;
+      const cell = row.insertCell();
+      cell.className = "indent";
+      const link = document.createElement("a");
+      link.href = location.href;
+      link.textContent = label;
+      cell.append(link);
+      compactSection(section);
+    };
     const setTab = (name) => {
+      if (html.dataset.tsmView === "sub") closeSubpage();
       html.dataset.tsmTab = name;
       for (const b of buttons) b.setAttribute("aria-selected", String(b.dataset.tab === name));
     };
     userContent.before(tabs);
-    setTab("schedule");
+    if (!subpage.length) {
+      setTab("schedule");
+      return;
+    }
+    decorateSubpage(subpage);
+    for (let n = subpage[0].previousElementSibling; n; n = n.previousElementSibling) {
+      if (n.tagName === "TABLE") {
+        section = n;
+        break;
+      }
+    }
+    section?.classList.add("tsm-active");
+    const title = section?.querySelector("td.std_header")?.textContent.trim().replace(/\s+/g, " ") || "";
+    const bar = el("div", "tsm-subbar");
+    const back = document.createElement("button");
+    back.type = "button";
+    back.className = "tsm-back";
+    back.textContent = "\u2039 Back";
+    back.addEventListener("click", () => {
+      setTab("more");
+      window.scrollTo(0, 0);
+    });
+    bar.append(back, el("span", "tsm-subbar-title", title));
+    tabs.after(bar);
+    setTab("more");
+    html.dataset.tsmView = "sub";
+    diag.log(`management form on the page: showing ${title || "its section"} with a back button`);
+  }
+
+  // A cell with nothing to show: no text beyond whitespace (the site pads
+  // with &nbsp;) and no control, image or link.
+  function isBlank(td) {
+    return !td.querySelector("img, input, select, textarea, button, a") && !td.textContent.replace(/\u00a0/g, "").trim();
+  }
+
+  // The facts table (status, hours, PTO) drops its spacer rows, its centred
+  // "PTO" caption row becomes a subheading, and the "View PTO Bank" link
+  // moves from the first row into that heading's spare cell.
+  function compactFacts(userContent) {
+    const table = userContent.querySelector("td.data_field")?.closest("table");
+    if (!table) return;
+    table.classList.add("tsm-facts");
+    let heading = null;
+    for (const r of table.querySelectorAll(":scope > tbody > tr")) {
+      const cells = [...r.children];
+      const filled = cells.filter((td) => !isBlank(td));
+      if (!filled.length) r.classList.add("tsm-blank");
+      else if (!heading && filled.length === 1 && filled[0].getAttribute("colspan")) {
+        heading = r;
+        r.classList.add("tsm-facts-heading");
+      }
+    }
+    if (!heading) return;
+    // the heading spans the whole row so the link can sit at its right edge
+    // without widening any column
+    const columns = Math.max(...[...table.querySelectorAll(":scope > tbody > tr")].map((r) => [...r.children].reduce((n, td) => n + (td.colSpan || 1), 0)));
+    const cell = heading.firstElementChild;
+    cell.colSpan = columns;
+    for (const td of [...heading.children]) if (td !== cell) td.classList.add("tsm-blank");
+    const link = table.querySelector(':scope > tbody > tr > td[align="right"] > a');
+    if (link) {
+      link.classList.add("tsm-facts-link");
+      cell.append(link);
+    }
+  }
+
+  // A section that is only a heading over one link becomes one row carrying
+  // the heading's name; the link's own wording ("Click Here to…") is dropped.
+  function compactSection(table) {
+    if (table.classList.contains("tsm-row")) return;
+    const header = table.querySelector(":scope > tbody > tr > td.std_header");
+    const links = table.querySelectorAll(":scope > tbody > tr > td.indent > a");
+    if (!header || links.length !== 1) return;
+    const rest = table.textContent.replace(header.textContent, "").replace(links[0].textContent, "").trim();
+    if (rest) return;
+    const link = links[0];
+    const label = el("span", "tsm-row-label");
+    label.textContent = header.textContent.trim().replace(/\s+/g, " ");
+    const original = el("span", "tsm-row-original");
+    while (link.firstChild) original.append(link.firstChild);
+    link.append(label, original);
+    table.classList.add("tsm-row");
+  }
+
+  // A jqGrid box: the header row's labels caption each body row's cells so
+  // the rows can be laid out as cards. Safe to call again as rows arrive.
+  function decorateGrid(box) {
+    const heads = [...(box.querySelector("table.ui-jqgrid-htable tr.ui-jqgrid-labels")?.children || [])];
+    const btable = box.querySelector("table.ui-jqgrid-btable");
+    if (!btable || !heads.length) return;
+    btable.classList.add("tsm-cards");
+    for (const r of btable.querySelectorAll(":scope > tbody > tr")) {
+      if (r.classList.contains("tsm-cards-head") || r.classList.contains("tsm-card")) continue;
+      if (r.classList.contains("jqgfirstrow")) {
+        r.classList.add("tsm-cards-head");
+        continue;
+      }
+      r.classList.add("tsm-card");
+      let filled = 0;
+      [...r.children].forEach((td, i) => {
+        if (td.style.display === "none" || heads[i]?.style.display === "none") {
+          td.classList.add("tsm-empty");
+          return;
+        }
+        if (td.classList.contains("action_column")) td.classList.add("tsm-cards-action");
+        else td.dataset.label = heads[i]?.textContent.trim() || "";
+        if (isBlank(td)) td.classList.add("tsm-empty");
+        else filled++;
+      });
+      if (!filled) r.classList.add("tsm-cards-blank");
+    }
+  }
+
+  // Lays a management form out for a phone: each row of its data tables
+  // becomes a card whose cells are captioned with their column headers.
+  function decorateSubpage(roots) {
+    const blank = isBlank;
+    for (const root of roots) {
+      root.classList.add("tsm-subpage");
+      if (root.querySelector(".ui-jqgrid")) root.classList.add("tsm-grid");
+      // spacer cells would each take a line once the rows stack
+      for (const td of root.querySelectorAll("td")) if (blank(td)) td.classList.add("tsm-empty");
+      for (const box of root.querySelectorAll(".ui-jqgrid")) decorateGrid(box);
+      for (const table of root.querySelectorAll("table.data_list")) {
+        const rows = [...table.querySelectorAll(":scope > tbody > tr")];
+        const header = rows.find((r) => r.children.length && [...r.children].every((c) => c.tagName === "TH"));
+        if (!header) continue;
+        const labels = [...header.children].map((th) => th.textContent.trim().replace(/:$/, ""));
+        table.classList.add("tsm-cards");
+        header.classList.add("tsm-cards-head");
+        for (const r of rows) {
+          if (r === header) continue;
+          const cells = [...r.children];
+          if (cells.length !== labels.length) {
+            r.classList.add(r.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING ? "tsm-cards-caption" : "tsm-cards-span");
+            continue;
+          }
+          let filled = 0;
+          cells.forEach((td, i) => {
+            if (labels[i]) td.dataset.label = labels[i];
+            else td.classList.add("tsm-cards-action");
+            if (td.querySelector("select, input, textarea")) td.classList.add("tsm-cards-wide");
+            if (!blank(td)) filled++;
+          });
+          if (!filled) r.classList.add("tsm-cards-blank");
+        }
+      }
+    }
   }
 
   function decorateToolbar() {
@@ -868,7 +1071,7 @@
 
   // ---- day cells ---------------------------------------------------------
 
-  function decorateDays(month, days, isLocation) {
+  function decorateDays(month, days, isLocation, dispatch) {
     const monthName = (month.querySelector("td.monthname")?.textContent || "").trim().split(/\s+/)[0] || "";
     const todayCell = month.querySelector("td.today");
     let beforeToday = Boolean(todayCell);
@@ -898,7 +1101,7 @@
       if (numberNode) numberNode.replaceWith(head);
       else td.prepend(head);
 
-      if (isLocation) decorateLocationDay(td);
+      if (isLocation) decorateLocationDay(td, dispatch);
       else decorateAgendaDay(td);
     }
   }
@@ -924,7 +1127,7 @@
     }
   }
 
-  function decorateLocationDay(td) {
+  function decorateLocationDay(td, dispatch) {
     const content = td.querySelector("table.eventcontent");
     if (!content) {
       td.classList.add("tsm-empty");
@@ -934,12 +1137,77 @@
     const units = content.querySelectorAll(":scope > tbody > tr");
     for (const unit of units) {
       unit.classList.add("tsm-unit");
+      // The heading loses a repeated name ("Alpha 1 (Alpha 1)" is "Alpha 1")
+      // and, on the Dispatch view, its "Communications-" prefix
+      // ("Communications-Night" is "Night"); the full text stays on the element.
+      const heading = unit.querySelector("div.location");
+      if (heading && !heading.dataset.tsmFull && heading.childNodes.length === 1 && heading.firstChild.nodeType === Node.TEXT_NODE) {
+        const full = tidy(heading.textContent);
+        let label = full;
+        const m = /^(.*?)\s*\((.*)\)$/.exec(full);
+        if (m && m[1] === m[2]) label = m[1];
+        if (dispatch) label = label.replace(/^comm\w*\s*[-–:]?\s*/i, "").trim() || label;
+        if (label !== full) {
+          heading.dataset.tsmFull = full;
+          heading.textContent = label;
+        }
+      }
       const open = unit.querySelectorAll("tr.unassigned").length;
       if (open > 0) unit.classList.add("tsm-has-open");
       openCount += open;
     }
     td.dataset.open = String(openCount);
     if (units.length === 0) td.classList.add("tsm-empty");
+  }
+
+  // The Dispatch unit view: picked in the view dropdown, or named by the
+  // template id in the address the dropdown's option points at.
+  function isDispatchView() {
+    const select = document.getElementById("view_select");
+    const option = select && [...select.options].find((o) => /dispatch/i.test(o.text));
+    if (!option) return false;
+    const id = new URL(option.value, location.href).searchParams.get("template_id");
+    return option.selected || (id !== null && new URLSearchParams(location.search).get("template_id") === id);
+  }
+
+  // Marks the dispatchers whose shift contains the current time, and keeps
+  // the marks current. A shift that started yesterday and runs past midnight
+  // counts too; the site lists it under yesterday, so today gets a note.
+  function markOnNow(days) {
+    const clock = serverClock();
+    const onAt = (td, minutes) => [...td.querySelectorAll("tr.employee")].filter((tr) => {
+      const range = parseRange(timeOf(tr));
+      return range && range.start <= minutes && minutes < range.end;
+    });
+    const apply = () => {
+      const now = new Date(clock());
+      const minutes = now.getHours() * 60 + now.getMinutes();
+      for (const tr of document.querySelectorAll("tr.tsm-on-now")) tr.classList.remove("tsm-on-now");
+      for (const unit of document.querySelectorAll(".tsm-unit-on-now")) unit.classList.remove("tsm-unit-on-now");
+      document.querySelector(".tsm-on-now-note")?.remove();
+      const todayIndex = days.findIndex((td) => td.classList.contains("today"));
+      if (todayIndex < 0) return;
+      const mark = (tr) => {
+        tr.classList.add("tsm-on-now");
+        tr.closest(".tsm-unit")?.classList.add("tsm-unit-on-now");
+      };
+      onAt(days[todayIndex], minutes).forEach(mark);
+      const sinceYesterday = todayIndex > 0 ? onAt(days[todayIndex - 1], minutes + 24 * 60) : [];
+      sinceYesterday.forEach(mark);
+      if (sinceYesterday.length) {
+        const note = el("div", "tsm-on-now-note");
+        note.append(el("span", "tsm-on-now-badge", "On now"), " since yesterday");
+        for (const tr of sinceYesterday) {
+          note.append(el("div", "tsm-on-now-line", `${tidy(tr.querySelector("td")?.textContent || "")} \u00b7 ${unitName(tr.closest(".tsm-unit"))} \u00b7 ${timeOf(tr)}`));
+        }
+        const content = days[todayIndex].querySelector("table.eventcontent");
+        if (content) content.before(note);
+        else days[todayIndex].prepend(note);
+      }
+      diag.log(`on now: ${document.querySelectorAll("tr.tsm-on-now").length} dispatcher(s) at ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`);
+    };
+    apply();
+    setInterval(apply, 60 * 1000);
   }
 
   // Flags the signed-in person's own slots. Returns the count per day.
