@@ -6,7 +6,8 @@
 // classes, wraps bare text nodes so CSS can style them, and inserts a day
 // pager for the location (all-units) views. On the individual view it also
 // loads the site's own unit views for the month to show who is on each of
-// your shifts. On the login page it remembers the username.
+// your shifts. On the login page it remembers the username. On the punch
+// clock page it shows one big button and asks before an early punch.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-filter, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -16,6 +17,7 @@
   const MOBILE_QUERY = "(max-width: 820px)";
   const CALENDAR_WAIT_MS = 30000;
   const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   // Views listed in the first dropdown, by label after the prefix is removed.
   const COMMON_VIEWS = ["individual month view", "available open shifts", "als", "bls", "details", "dispatch"];
   const VIEW_PREFIX = /^vehicle\/location month view\s*-\s*/i;
@@ -23,6 +25,10 @@
   const CREW_VIEWS = ["bls", "als", "details"];
   const CREW_CACHE_MS = 10 * 60 * 1000;
   const LOGIN_KEY = "tsm.login.username";
+  const PUNCH_URL = "/main.php?a=user:punchin";
+  // Company policy: punches up to this long before the shift boundary need
+  // no explanation; earlier ones make the site demand a reason.
+  const EARLY_LIMIT_MS = 7 * 60 * 1000;
   const html = document.documentElement;
 
   // Progress notes go to the console (filter on "Traumasoft Mobile").
@@ -64,6 +70,16 @@
     if (!/main\.php$/.test(location.pathname)) return;
     if (!isPhoneWidth()) {
       diag.log("desktop-sized viewport: not activating");
+      return;
+    }
+    html.dataset.tsmChrome = "on";
+    addPunchClockLink();
+    if (document.getElementById("punchin_form")) {
+      try {
+        initPunchPage();
+      } catch (e) {
+        diag.log(`error on punch page: ${e && e.message ? e.message : e}`);
+      }
       return;
     }
     diag.log(`DOM ready · #view_select ${document.getElementById("view_select") ? "yes" : "no"} · table.month ${document.querySelector("table.month") ? "yes" : "no"}`);
@@ -127,6 +143,265 @@
       loadCrew(days).catch((e) => diag.log(`crew: ${e && e.message ? e.message : e}`));
     }
     diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
+  }
+
+  // ---- header: punch clock link --------------------------------------------
+
+  // The site's Vue header renders after load and may re-render; keep a link
+  // to the punch clock beside the signed-in name. The chat button it
+  // replaces is hidden by the stylesheet.
+  function addPunchClockLink() {
+    const place = () => {
+      const right = document.getElementById("ts_menus_right_div");
+      if (!right || document.getElementById("tsm-punchlink")) return;
+      const link = document.createElement("a");
+      link.id = "tsm-punchlink";
+      link.className = "tsm-punchlink";
+      link.href = PUNCH_URL;
+      link.title = "Punch Clock";
+      link.setAttribute("aria-label", "Punch Clock");
+      link.append(clockIcon(), el("span", "tsm-punchlink-text", "Punch"));
+      const user = document.getElementById("ts_menus_user_div");
+      if (user && user.parentNode === right) user.before(link);
+      else right.append(link);
+    };
+    place();
+    new MutationObserver(place).observe(html, { childList: true, subtree: true });
+  }
+
+  function clockIcon() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", "20");
+    svg.setAttribute("height", "20");
+    svg.setAttribute("aria-hidden", "true");
+    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    circle.setAttribute("cx", "12");
+    circle.setAttribute("cy", "12");
+    circle.setAttribute("r", "9");
+    const hands = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    hands.setAttribute("d", "M12 7v5l3.5 2");
+    for (const node of [circle, hands]) {
+      node.setAttribute("fill", "none");
+      node.setAttribute("stroke", "currentColor");
+      node.setAttribute("stroke-width", "2");
+      node.setAttribute("stroke-linecap", "round");
+      svg.append(node);
+    }
+    return svg;
+  }
+
+  // ---- punch clock page ----------------------------------------------------
+
+  // One big button for whichever punch the site currently allows, a live
+  // clock and the shift list kept, the rest hidden. A punch more than
+  // EARLY_LIMIT_MS before the shift boundary asks first, because the site
+  // has no way back once it asks for a reason.
+  function initPunchPage() {
+    const form = document.getElementById("punchin_form");
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "punch";
+    html.dataset.tsmReady = "1";
+
+    const kind = punchKind();
+    const shifts = readShifts();
+    const now = serverClock();
+
+    const box = el("div", "tsm-punch");
+    const clock = el("div", "tsm-punch-time");
+    const tick = () => {
+      clock.textContent = fmtClock(now());
+    };
+    tick();
+    setInterval(tick, 1000);
+    const dateLine = el("div", "tsm-punch-date", fmtLongDate(now()));
+
+    const shiftBox = el("div", "tsm-punch-shifts");
+    const shiftTable = document.querySelector("table.punchclock_shifts");
+    if (shiftTable) {
+      shortenShiftDates(shiftTable);
+      shiftBox.append(shiftTable);
+    }
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `tsm-punch-btn tsm-punch-${kind || "none"}`;
+    btn.textContent = kind === "out" ? "Punch Out" : "Punch In";
+
+    box.append(clock, dateLine, shiftBox, kind ? btn : el("div", "tsm-punch-note", "No punch is available right now."));
+    form.before(box);
+
+    btn.addEventListener("click", () => {
+      if (btn.disabled) return;
+      const t = now();
+      const relevant = relevantShift(shifts, t, kind);
+      const go = () => punch(kind, btn);
+      if (!relevant) {
+        confirmBox({
+          title: `\u26A0\uFE0F Punch ${kind}?`,
+          lines: [`It's ${fmtTime(t)}. No scheduled shift found to check against.`, `Punch ${kind} anyway?`],
+        }, go);
+        return;
+      }
+      const check = earlyCheck(kind, relevant, t);
+      if (!check.early) {
+        go();
+        return;
+      }
+      confirmBox({
+        title: `\u26A0\uFE0F Punch ${kind} early?`,
+        lines: [`It's ${fmtTime(t)}. Your ${shiftNoun(relevant)} ${kind === "in" ? "starts" : "ends"} in ${fmtLead(check.lead)}.`, `Punch ${kind} anyway?`],
+      }, go);
+    });
+    diag.log(`punch clock page · ${kind ? "punch " + kind : "no punch"} available · ${shifts.length} shifts listed`);
+  }
+
+  // "11/04/2026 07:00 to 11/04/2026 19:00" -> "Nov 4 @ 07:00 — Nov 4 @ 19:00"
+  // in the shift rows, leaving any line breaks as they are.
+  function shortenShiftDates(table) {
+    const walker = document.createTreeWalker(table, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      node.textContent = node.textContent
+        .replace(/\b(\d{1,2})\/(\d{1,2})\/\d{4}\s+(\d{1,2}:\d{2})/g, (m, mo, d, time) => `${MONTHS[Number(mo) - 1] || mo} ${Number(d)} @ ${time}`)
+        .replace(/(\d{2}:\d{2})\s+to\s+/g, "$1 — ");
+    }
+  }
+
+  // Which punch the site offers: its enabled control is an <img> with an
+  // onclick, the disabled one an <input type="image" disabled>.
+  function punchKind() {
+    const usable = (id) => {
+      const node = document.getElementById(id);
+      if (!node || node.disabled || node.hasAttribute("disabled")) return false;
+      return node.tagName === "IMG" ? Boolean(node.getAttribute("onclick")) : true;
+    };
+    const inOk = usable("punchin_img");
+    const outOk = usable("punchout_img");
+    if (inOk !== outOk) return inOk ? "in" : "out";
+    const flag = document.getElementById("punch_in")?.value;
+    if (flag === "1") return "in";
+    if (flag === "0") return "out";
+    return inOk ? "in" : null;
+  }
+
+  // Hands the punch to the site's own control, which runs its checks and
+  // submits the form.
+  function punch(kind, btn) {
+    const target = document.getElementById(kind === "in" ? "punchin_img" : "punchout_img");
+    if (!target) return;
+    btn.disabled = true;
+    btn.textContent = kind === "in" ? "Punching in…" : "Punching out…";
+    target.click();
+    // If the site stopped the punch (not qualified, break rule), let them retry.
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = kind === "in" ? "Punch In" : "Punch Out";
+    }, 8000);
+  }
+
+  // "Last Shift / Current Shifts / Next Shift" rows: "MM/DD/YYYY HH:MM to
+  // MM/DD/YYYY HH:MM", possibly several per row.
+  function readShifts() {
+    const out = [];
+    const re = /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})\s+to\s+(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/g;
+    for (const tr of document.querySelectorAll("table.punchclock_shifts tr")) {
+      const cells = tr.querySelectorAll("td");
+      if (cells.length < 2) {
+        tr.classList.add("tsm-shift-head");
+        continue;
+      }
+      tr.classList.add("tsm-shift-row");
+      const label = tidy(cells[0].textContent).replace(/:$/, "");
+      let count = 0;
+      for (const m of cells[1].textContent.matchAll(re)) {
+        out.push({
+          label,
+          row: tr,
+          start: new Date(+m[3], +m[1] - 1, +m[2], +m[4], +m[5]).getTime(),
+          end: new Date(+m[8], +m[6] - 1, +m[7], +m[9], +m[10]).getTime(),
+        });
+        count += 1;
+      }
+      if (!count) tr.classList.add("tsm-shift-empty");
+    }
+    return out;
+  }
+
+  // The page embeds the server's clock; count from it rather than the phone.
+  function serverClock() {
+    for (const script of document.scripts) {
+      const m = /moment\.unix\((\d{9,11})\)/.exec(script.textContent || "");
+      if (m) {
+        const base = Number(m[1]) * 1000;
+        return () => base + performance.now();
+      }
+    }
+    return () => Date.now();
+  }
+
+  // The shift this punch is for: the one whose hours contain now, else the
+  // nearest. A punch in is for a shift that has not ended yet; on a tie a
+  // punch out belongs to the earlier shift.
+  function relevantShift(shifts, now, kind) {
+    let best = null;
+    let bestScore = Infinity;
+    const pool = kind === "in" && shifts.some((s) => s.end > now) ? shifts.filter((s) => s.end > now) : shifts;
+    for (const s of pool) {
+      const score = now < s.start ? s.start - now : now > s.end ? now - s.end : 0;
+      const better = score < bestScore || (score === bestScore && best && (kind === "out" ? s.start < best.start : s.start > best.start));
+      if (better) {
+        best = s;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  function earlyCheck(kind, shift, now) {
+    const target = kind === "in" ? shift.start : shift.end;
+    const lead = target - now;
+    return { early: lead > EARLY_LIMIT_MS, lead, target, allowedFrom: target - EARLY_LIMIT_MS };
+  }
+
+  function shiftNoun(shift) {
+    const l = shift.label.toLowerCase();
+    if (l.startsWith("next")) return "next shift";
+    if (l.startsWith("last")) return "last shift";
+    return "current shift";
+  }
+
+  function confirmBox({ title, lines }, onYes) {
+    const overlay = el("div", "tsm-confirm");
+    const card = el("div", "tsm-confirm-card");
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    card.append(el("div", "tsm-confirm-title", title));
+    for (const line of lines) card.append(el("p", "tsm-confirm-line", line));
+    const actions = el("div", "tsm-confirm-actions");
+    const ok = document.createElement("button");
+    ok.type = "button";
+    ok.className = "tsm-confirm-yes";
+    ok.textContent = "Yes";
+    const no = document.createElement("button");
+    no.type = "button";
+    no.className = "tsm-confirm-no";
+    no.textContent = "No";
+    actions.append(no, ok);
+    card.append(actions);
+    overlay.append(card);
+    const close = () => overlay.remove();
+    no.addEventListener("click", close);
+    ok.addEventListener("click", () => {
+      close();
+      onYes();
+    });
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) close();
+    });
+    document.body.append(overlay);
+    no.focus();
   }
 
   // ---- login page: remember the username ---------------------------------
@@ -1042,6 +1317,35 @@
 
   function tidy(text) {
     return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+
+  function fmtTime(ms) {
+    const d = new Date(ms);
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  }
+
+  function fmtClock(ms) {
+    const d = new Date(ms);
+    return `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+  }
+
+  function fmtLongDate(ms) {
+    return new Date(ms).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  }
+
+  // "34 h 06 min", "12 min 30 s", "45 s"
+  function fmtLead(ms) {
+    const total = Math.max(0, Math.round(ms / 1000));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const sec = total % 60;
+    if (h > 0) return `${h} h ${pad2(m)} min`;
+    if (m > 0) return sec ? `${m} min ${sec} s` : `${m} min`;
+    return `${sec} s`;
   }
 
   function timeOf(tr) {

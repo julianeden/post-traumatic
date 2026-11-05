@@ -47,7 +47,26 @@ async function serveFixtures(context, blocked) {
       const path = file && join(fixtures, file);
       if (path && path.startsWith(fixtures) && existsSync(path)) {
         const type = basename(path) === "login" ? "text/html" : TYPES[extname(path).toLowerCase()] || "application/octet-stream";
-        return route.fulfill({ status: 200, contentType: type, body: readFileSync(path) });
+        let body = readFileSync(path);
+        // Punch page variants: "now" moves the server clock the page embeds;
+        // "punched=in" rewrites the page the way the site does once you are
+        // punched in (controls swapped, current shift filled in).
+        if (url.searchParams.get("now") || url.searchParams.get("punched") === "in") {
+          let html = body.toString("utf8");
+          const now = url.searchParams.get("now");
+          if (now) html = html.replace(/moment\.unix\(\d+\)/, `moment.unix(${now})`);
+          if (url.searchParams.get("punched") === "in") {
+            html = html
+              .replace(/<img src="([^"]*)" class="punch_button" onclick="checkEmpQualified\(\); return false;" style="cursor: pointer;" name="punchin_img" id="punchin_img">/,
+                '<input type="image" name="punchin_img" id="punchin_img" src="$1" class="punch_button" disabled="disabled">')
+              .replace(/<input type="image" name="punchout_img" id="punchout_img" src="([^"]*)" class="punch_button" disabled="disabled">/,
+                '<img src="$1" class="punch_button" onclick="punchout(); return false;" style="cursor: pointer;" name="punchout_img" id="punchout_img">')
+              .replace('id="punch_in" value="1"', 'id="punch_in" value="0"')
+              .replace(/(Current Shifts:<\/td>\s*<td nowrap="nowrap">)(<\/td>)/, "$111/06/2026 07:00 to 11/06/2026 19:00$2");
+          }
+          body = Buffer.from(html, "utf8");
+        }
+        return route.fulfill({ status: 200, contentType: type, body });
       }
     } else {
       blocked?.add(url.host);
@@ -58,6 +77,151 @@ async function serveFixtures(context, blocked) {
 
 const browser = await chromium.launch({ headless: true });
 let failures = 0;
+
+// Punch clock page: one big button, nothing else to scroll, and the
+// are-you-sure card before an early punch. The site's own flow ends in a
+// form submit (its break check is an AJAX call that is blocked here, and the
+// error path submits), so a submit listener records whether a punch went out.
+async function checkPunchPage(page, file) {
+  const load = async (params) => {
+    await page.goto(`${ORIGIN}/main.php?a=user:punchin&fixture=${encodeURIComponent(file)}${params}`, { waitUntil: "load", timeout: 60_000 });
+    await page.evaluate(() => {
+      // jQuery's .submit() ends in the native form.submit(), which fires no
+      // event; shadow the method so a punch is counted instead of navigating.
+      window.__tsmSubmits = 0;
+      const form = document.getElementById("punchin_form");
+      form.addEventListener("submit", (e) => { e.preventDefault(); window.__tsmSubmits += 1; });
+      Object.defineProperty(form, "submit", { value: () => { window.__tsmSubmits += 1; }, configurable: true });
+    });
+    await page.addStyleTag({ path: cssPath });
+    await page.addScriptTag({ path: jsPath });
+    await page.waitForTimeout(400);
+  };
+  const state = () => page.evaluate(() => {
+    const vis = (el) => Boolean(el && el.offsetParent !== null);
+    const buttons = [...document.querySelectorAll(".tsm-punch-btn")].filter(vis);
+    const welcome = [...document.querySelectorAll("td")].find((td) => /successfully logged into/.test(td.textContent));
+    const confirm = document.querySelector(".tsm-confirm");
+    return {
+      pageMode: document.documentElement.dataset.tsmPage,
+      buttons: buttons.map((b) => ({ text: b.textContent, disabled: b.disabled, width: Math.round(b.getBoundingClientRect().width), height: Math.round(b.getBoundingClientRect().height) })),
+      siteControls: ["punchin_img", "punchout_img"].filter((id) => vis(document.getElementById(id))).length + document.querySelectorAll("a.punch_out_link").length - [...document.querySelectorAll("a.punch_out_link")].filter((a) => !vis(a)).length,
+      welcomeShown: vis(welcome),
+      time: document.querySelector(".tsm-punch-time")?.textContent.trim(),
+      timeShown: vis(document.querySelector(".tsm-punch-time")),
+      shiftRows: [...document.querySelectorAll(".tsm-shift-row")].filter(vis).map((tr) => {
+        const value = tr.querySelector("td:last-child");
+        return { label: tr.querySelector("td:first-child").textContent.trim(), value: value.textContent.trim(), lines: Math.round(value.getBoundingClientRect().height / parseFloat(getComputedStyle(value).lineHeight)) };
+      }),
+      headShown: vis(document.querySelector(".tsm-shift-head")),
+      shaded: [...document.querySelectorAll(".tsm-shift-row")].filter((tr) => getComputedStyle(tr).backgroundColor !== "rgba(0, 0, 0, 0)").length,
+      footShown: vis(document.getElementById("continue")) || vis(document.getElementById("logout_button")),
+      scrollHeight: document.documentElement.scrollHeight,
+      innerHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+      confirm: confirm ? { title: confirm.querySelector(".tsm-confirm-title")?.textContent, text: confirm.textContent, yes: confirm.querySelector(".tsm-confirm-yes")?.textContent } : null,
+      submits: window.__tsmSubmits,
+      loading: vis(document.getElementById("json_loading_dialog")),
+    };
+  });
+  const tapPunch = () => page.locator(".tsm-punch-btn").click();
+
+  // As saved: punched out, next shift 11/06 07:00, server clock 11/04 20:54.
+  await load("");
+  let st = await state();
+  if (st.pageMode !== "punch") fail("punch page not recognised");
+  if (st.buttons.length !== 1 || st.buttons[0].text !== "Punch In") fail(`expected one "Punch In" button, got ${JSON.stringify(st.buttons)}`);
+  if (st.buttons[0] && (st.buttons[0].width < 300 || st.buttons[0].height < 60)) fail(`punch button is small: ${st.buttons[0].width}x${st.buttons[0].height}`);
+  if (st.siteControls) fail("the site's own punch controls are still visible");
+  if (st.welcomeShown) fail("welcome text still visible");
+  if (!st.timeShown || !/^\d\d:\d\d:\d\d$/.test(st.time || "")) fail(`clock with seconds not shown (${st.time})`);
+  await page.waitForTimeout(1100);
+  const later = await state();
+  if (later.time === st.time) fail(`clock does not tick (${st.time})`);
+  if (st.shiftRows.length !== 3) fail(`expected 3 shift rows, got ${st.shiftRows.length}`);
+  const byLabel = Object.fromEntries(st.shiftRows.map((r) => [r.label.replace(/:$/, ""), r]));
+  if (byLabel["Last Shift"]?.value !== "Nov 4 @ 07:00 — Nov 4 @ 19:00") fail(`Last Shift reads "${byLabel["Last Shift"]?.value}"`);
+  if (byLabel["Next Shift"]?.value !== "Nov 6 @ 07:00 — Nov 6 @ 19:00") fail(`Next Shift reads "${byLabel["Next Shift"]?.value}"`);
+  if (st.shiftRows.some((r) => /\d{4}/.test(r.value))) fail("a shift row still shows a year");
+  if (st.shiftRows.some((r) => r.value && r.lines > 1)) fail(`a shift row wraps: ${JSON.stringify(st.shiftRows)}`);
+  if (st.headShown) fail("'Scheduled Shifts' title still shown");
+  if (st.shaded) fail(`${st.shaded} shift row(s) have a background`);
+  if (st.footShown) fail("Continue / Logout still visible");
+  if (st.scrollHeight > st.innerHeight) fail(`punch page scrolls: ${st.scrollHeight} > ${st.innerHeight}`);
+  if (st.scrollWidth > VIEWPORT.width) fail(`punch page overflows horizontally: ${st.scrollWidth}`);
+  console.log(`  punch page: ${st.time} · ${st.buttons.map((b) => b.text).join("/")} · ${st.shiftRows.map((r) => `${r.label} ${r.value || "none"}`).join(" | ")}`);
+  await page.screenshot({ path: join(outDir, "punch-out-state.png") });
+
+  // 34 hours early: the card appears, "Not now" cancels without a submit.
+  await tapPunch();
+  await page.waitForTimeout(200);
+  st = await state();
+  if (!st.confirm) fail("early punch in did not ask first");
+  else {
+    if (!/It's 20:54\. Your next shift starts in 34 h 0[456] min\.Punch in anyway\?/.test(st.confirm.text)) fail(`early card text unexpected: ${st.confirm.text}`);
+    if (!/Punch in early\?/.test(st.confirm.title) || st.confirm.yes !== "Yes") fail(`early card title/button: "${st.confirm.title}" / "${st.confirm.yes}"`);
+    if ((await page.locator(".tsm-confirm-line").count()) !== 2) fail("the question is not on its own line");
+    console.log(`  early card: ${st.confirm.title} — ${st.confirm.text.replace(st.confirm.title, "").trim()}`);
+    await page.screenshot({ path: join(outDir, "punch-early-card.png") });
+    await page.locator(".tsm-confirm-no").click();
+    await page.waitForTimeout(100);
+    st = await state();
+    if (st.confirm) fail("Not now did not close the card");
+    if (st.submits) fail("Not now still submitted the punch");
+    // and "anyway" hands over to the site, which submits
+    await tapPunch();
+    await page.locator(".tsm-confirm-yes").click();
+    await page.waitForTimeout(800);
+    st = await state();
+    if (st.submits !== 1) fail(`Punch in anyway should submit once, submitted ${st.submits}`);
+    if (!st.loading) fail("site's loading dialog did not open after the punch");
+    console.log("  early card: No cancels; Yes submits through the site's own handler");
+  }
+
+  // 5 minutes before the shift: no card, straight to the site's handler.
+  const t0655 = Math.floor(new Date(2026, 10, 6, 6, 55).getTime() / 1000);
+  await load(`&now=${t0655}`);
+  await tapPunch();
+  await page.waitForTimeout(800);
+  st = await state();
+  if (st.confirm) fail("punch in 5 minutes early should not ask");
+  if (st.submits !== 1) fail(`punch in at 06:55 should submit once, submitted ${st.submits}`);
+  console.log("  at 06:55: no card, punched straight through");
+
+  // Exactly 7 minutes and one second early still asks.
+  const t065259 = Math.floor(new Date(2026, 10, 6, 6, 52, 59).getTime() / 1000);
+  await load(`&now=${t065259}`);
+  await tapPunch();
+  await page.waitForTimeout(200);
+  st = await state();
+  if (!st.confirm) fail("punch in 7 min 1 s early should ask");
+  else if (!/\b7 min\b/.test(st.confirm.text)) fail(`7:01 card text: ${st.confirm.text}`);
+  console.log("  at 06:52:59: card shown (7 min 1 s early)");
+
+  // Punched in, mid-shift at 10:00: Punch Out, 9 hours early, asks.
+  const t1000 = Math.floor(new Date(2026, 10, 6, 10, 0).getTime() / 1000);
+  await load(`&punched=in&now=${t1000}`);
+  st = await state();
+  if (st.buttons.length !== 1 || st.buttons[0].text !== "Punch Out") fail(`punched in: expected one "Punch Out" button, got ${JSON.stringify(st.buttons)}`);
+  if (!st.shiftRows.some((r) => /^Current/.test(r.label) && r.value === "Nov 6 @ 07:00 — Nov 6 @ 19:00")) fail(`punched in: current shift row reads ${JSON.stringify(st.shiftRows)}`);
+  await tapPunch();
+  await page.waitForTimeout(200);
+  st = await state();
+  if (!st.confirm || !/It's 10:00\. Your current shift ends in (9 h 00|8 h 59) min\.Punch out anyway\?/.test(st.confirm.text) || st.confirm.yes !== "Yes") fail(`early punch out card: ${JSON.stringify(st.confirm)}`);
+  console.log(`  punched in at 10:00: ${st.buttons.map((b) => b.text).join("/")}; card: ${st.confirm?.title}`);
+  await page.screenshot({ path: join(outDir, "punch-in-state-card.png") });
+  await page.locator(".tsm-confirm-no").click();
+
+  // Punched in at 18:54: punch out goes straight through.
+  const t1854 = Math.floor(new Date(2026, 10, 6, 18, 54).getTime() / 1000);
+  await load(`&punched=in&now=${t1854}`);
+  await tapPunch();
+  await page.waitForTimeout(800);
+  st = await state();
+  if (st.confirm) fail("punch out 6 minutes early should not ask");
+  if (st.submits !== 1) fail(`punch out at 18:54 should submit once, submitted ${st.submits}`);
+  console.log("  punched in at 18:54: no card, punched out straight through");
+}
 
 function fail(msg) {
   failures += 1;
@@ -141,6 +305,12 @@ if (existsSync(loginFixture)) {
 for (const file of pages) {
   const name = file.replace(/\.html?$/i, "");
   console.log(`${file}`);
+  // A page saved while the add-on was running already carries its markup
+  // and state, so the script would find nothing to do; it is not a fixture.
+  if (/data-tsm-ready=/.test(readFileSync(join(fixtures, file), "utf8").slice(0, 2000))) {
+    console.log("  (saved with the add-on active; skipped. Re-save it with the add-on disabled to test it)");
+    continue;
+  }
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const blocked = new Set();
   await serveFixtures(context, blocked);
@@ -195,13 +365,30 @@ for (const file of pages) {
       overflowing: wide.slice(0, 5).map((el) => `${el.tagName.toLowerCase()}${el.id ? "#" + el.id : ""}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).join(".") : ""} right=${Math.round(el.getBoundingClientRect().right)}`),
       visibleDays: [...document.querySelectorAll('td[id^="day_"]')].filter((td) => td.offsetParent !== null).length,
       chips: document.querySelectorAll(".tsm-chip").length,
+      hasHeader: Boolean(document.getElementById("ts_menus_right_div")),
+      punchLink: document.getElementById("tsm-punchlink"),
+      // The harness header keeps its desktop search box, so only visibility
+      // is checked here, not that the link fits beside it.
+      punchLinkShown: Boolean(document.getElementById("tsm-punchlink")?.offsetParent),
+      punchLinkHref: document.getElementById("tsm-punchlink")?.getAttribute("href"),
+      chat: Boolean(document.getElementById("chat_button")),
+      chatShown: Boolean(document.getElementById("chat_button")?.offsetParent),
+      punchPage: Boolean(document.getElementById("punchin_form")),
     };
   });
+  if (after.hasHeader) {
+    if (!after.punchLinkShown) fail("header has no visible Punch link");
+    if (after.punchLinkHref !== "/main.php?a=user:punchin") fail(`Punch link points at ${after.punchLinkHref}`);
+    if (after.chatShown) fail("chat button still visible in the header");
+    console.log(`  header: Punch link ${after.punchLinkShown ? "shown" : "missing"}; chat button ${after.chat ? (after.chatShown ? "visible" : "hidden") : "not on this page"}`);
+  }
 
   console.log(`  before: width ${before.scrollWidth}px, ${before.days} days, ${before.handlers} pickup handlers`);
   console.log(`  after:  mode=${after.mode}, width ${after.scrollWidth}px, ${after.visibleDays} visible days, ${after.handlers} pickup handlers, blocked hosts: ${[...blocked].join(", ") || "none"}`);
 
-  if (!before.hasMonth) {
+  if (after.punchPage) {
+    await checkPunchPage(page, file);
+  } else if (!before.hasMonth) {
     console.log("  (no calendar on this page; chrome styling only)");
   } else {
     if (!after.active) fail("add-on did not activate");

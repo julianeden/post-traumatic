@@ -18,6 +18,35 @@ On the login page, at any width:
   `"current-password"`) so Firefox's own password manager can recognise the
   form. The password is never stored.
 
+On every `main.php` page at phone widths:
+
+- **Punch button in the header.** A "Punch" link to the punch clock page
+  (`main.php?a=user:punchin`) sits beside the signed-in name in the site's
+  header, and the Traumasoft Chat button is hidden. The header is rendered
+  by the site's Vue app after load and can re-render, so the link is
+  re-inserted whenever it goes missing.
+
+On the punch clock page (`main.php?a=user:punchin`) at phone widths:
+
+- **One button.** The site renders the available punch as an image with a
+  click handler and the other as a disabled image input; the page shows a
+  single large Punch In or Punch Out button for whichever applies, keeps the
+  clock (the site's own `#current_time`, still refreshed by its script), the
+  Last / Current / Next shift rows with the relevant one marked, and the
+  Continue and Logout buttons. The welcome text, the Call Status notice and
+  the table chrome are hidden, so nothing scrolls.
+- **Early-punch check.** The site asks for a reason after an early punch
+  and offers no way back, so the add-on asks first. It picks the shift the
+  punch is for (the one whose hours contain now, otherwise the nearest; a
+  punch in only considers shifts that have not ended) and compares the
+  server's clock, which the page embeds, with the shift start (punch in) or
+  end (punch out). More than 7 minutes early, the policy limit, brings up a
+  card with the time, the shift boundary, the earliest no-questions time
+  and "Punch in/out anyway" or "Not now". Within the limit the punch goes
+  straight to the site's own handler (`checkEmpQualified()` / `punchout()`),
+  which runs its checks and submits. If no shift is listed at all it asks
+  once rather than punching blind.
+
 On `main.php?a=user:schedule` (and the `view=schedule` calendar views) at
 phone widths:
 
@@ -105,7 +134,9 @@ choose "Web Page, complete", and save into `test/fixtures/` (gitignored), or
 anywhere and point `TSM_FIXTURES` at the folder. Save one file per view you
 care about, e.g. the Individual Month View and the BLS Vehicle/Location view.
 Save the login page too, as a file called `login` (no extension), to exercise
-the username memory.
+the username memory, and the punch clock page as `punchClockPage.html`.
+Save pages with the add-on disabled: a page saved while it was running
+already contains its markup and is skipped.
 
 ```sh
 npm test
@@ -120,8 +151,11 @@ formed request for the BLS view (answered with the saved BLS page) and its
 spares list matches an independent reading of that page, that the pickup handlers are untouched, that the location
 view shows exactly one day with a chip per day, that the "Open only" and
 person filters hide the right units, that the person calendar's dots agree
-with the day chips and its shift card matches the day's own unit list, and
-that the confirmation dialog fits the viewport. Screenshots of every state
+with the day chips and its shift card matches the day's own unit list, that
+the confirmation dialog fits the viewport, and that the punch clock page
+shows one button, does not scroll, asks before early punches (the fixture's
+server clock is moved and a punched-in state synthesised for the variants)
+and hands non-early punches to the site's handler. Screenshots of every state
 land in `test/out/`.
 
 ## Distribution

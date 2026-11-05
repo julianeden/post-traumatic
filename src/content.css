@@ -1362,3 +1362,230 @@ html[data-tsm="on"] .ui-widget-overlay {
   width: auto !important;
   height: auto !important;
 }
+
+/* ---------- header: punch clock link in place of chat ---------- */
+
+html[data-tsm-chrome="on"] #chat_button {
+  display: none !important;
+}
+
+html[data-tsm-chrome="on"] #ts_menus_right_div {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+html[data-tsm-chrome="on"] .tsm-punchlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 7px 12px 7px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff !important;
+  font: 700 13px system-ui, -apple-system, Roboto, sans-serif;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+html[data-tsm-chrome="on"] .tsm-punchlink svg {
+  display: block;
+}
+
+/* ---------- punch clock page ---------- */
+
+html[data-tsm-page="punch"] #punchin_form > table,
+html[data-tsm-page="punch"] #main-content > .clear,
+html[data-tsm-page="punch"] #footer {
+  display: none !important;
+}
+
+html[data-tsm-page="punch"] #main-content {
+  min-height: calc(100vh - 110px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12px 16px 20px !important;
+}
+
+html[data-tsm-page="punch"] .tsm-punch {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1f2937;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-time {
+  margin-top: 4px;
+  text-align: center;
+  font-size: 58px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-date {
+  margin-top: -4px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-shifts {
+  margin-top: 6px;
+  padding: 4px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+}
+
+html[data-tsm-page="punch"] table.punchclock_shifts,
+html[data-tsm-page="punch"] table.punchclock_shifts > tbody {
+  display: block;
+  width: 100% !important;
+}
+
+html[data-tsm-page="punch"] .tsm-shift-head {
+  display: none !important;
+}
+
+html[data-tsm-page="punch"] .tsm-shift-row {
+  display: block;
+  padding: 10px 0;
+  border-top: 1px solid #f1f3f5;
+}
+
+html[data-tsm-page="punch"] .tsm-shift-row:first-of-type,
+html[data-tsm-page="punch"] .tsm-shift-head + .tsm-shift-row {
+  border-top: 0;
+}
+
+html[data-tsm-page="punch"] table.punchclock_shifts td {
+  display: block;
+  padding: 0 !important;
+  white-space: normal !important;
+}
+
+html[data-tsm-page="punch"] .tsm-shift-row td:first-child {
+  margin-bottom: 3px;
+  font-size: 12px !important;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280 !important;
+}
+
+html[data-tsm-page="punch"] .tsm-shift-row td:last-child {
+  font-size: 16px !important;
+  font-weight: 600;
+  line-height: 1.35;
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+}
+
+html[data-tsm-page="punch"] .tsm-shift-empty td:last-child::before {
+  content: "none";
+  color: #9ca3af;
+  font-weight: 400;
+  font-style: italic;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-btn {
+  width: 100%;
+  margin-top: 28px;
+  padding: 26px 16px;
+  border: 0;
+  border-radius: 18px;
+  color: #fff;
+  font: 800 26px system-ui, -apple-system, Roboto, sans-serif;
+  letter-spacing: 0.01em;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+html[data-tsm-page="punch"] .tsm-punch-in {
+  background: #1f7a32;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-out {
+  background: #b3261e;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-btn:disabled {
+  opacity: 0.6;
+  box-shadow: none;
+}
+
+html[data-tsm-page="punch"] .tsm-punch-note {
+  margin-top: 28px;
+  padding: 18px;
+  text-align: center;
+  border-radius: 14px;
+  background: #eef0f3;
+  color: #4b5563;
+  font-weight: 600;
+}
+
+/* the are-you-sure card for early punches */
+html[data-tsm="on"] .tsm-confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.55);
+}
+
+html[data-tsm="on"] .tsm-confirm-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 18px 18px 16px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+  font-family: system-ui, -apple-system, Roboto, sans-serif;
+  color: #1f2937;
+}
+
+html[data-tsm="on"] .tsm-confirm-title {
+  margin-bottom: 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #111827;
+}
+
+html[data-tsm="on"] .tsm-confirm-line {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+html[data-tsm="on"] .tsm-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+html[data-tsm="on"] .tsm-confirm-no,
+html[data-tsm="on"] .tsm-confirm-yes {
+  flex: 1 1 0;
+  padding: 13px 10px;
+  border-radius: 12px;
+  font: 700 15px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+html[data-tsm="on"] .tsm-confirm-no,
+html[data-tsm="on"] .tsm-confirm-yes {
+  border: 1px solid #cfd4db;
+  background: #fff;
+  color: #111827;
+}
