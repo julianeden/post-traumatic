@@ -6,7 +6,7 @@ Talk to Julian Eden on Blink if you encounter any issues.
 
 ## iPhone (Safari)
 
-1. Install the free **Userscripts** app from the App Store and open it once so it sets itself up. You can close it right after.
+1. Install the free **Userscripts** app from the App Store and open it once so it can initialize. You can close it right after.
 2. In the Settings app go to **Apps → Safari → Extensions → Userscripts**. Turn it on and set **All Websites** to **Allow**. If Safari asks later, choose **Always Allow**, not one day.
 3. In Safari, open https://tinyurl.com/post-traumatic. Tap **aA** in the address bar, tap **Userscripts**, then **Install**.
 
