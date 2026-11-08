@@ -11,7 +11,7 @@
   "version": {
     "license": "MIT",
     "release_notes": {
-      "en-US": "More Options: the Shift Substitutions, Shift Trades, Time Off and Pickup Shifts pages open on their own form, laid out as cards, under a Back button; the list itself is shorter and fits the screen without scrolling, and the copyright footer is gone. Dispatch view: positions are named Supervisor, Day, Eve, Night and Training, and whoever is on right now is marked, including last night's shift running past midnight. Today button lands on today instead of the day after. Checklist odometer: the upper limit stays off, and a reading typed with tenths is sent as whole miles, as the site expects."
+      "en-US": "Shifts that run through midnight: a partner who joins at midnight is listed by the site under the next day, so the schedule used to show you alone. Your month, the unit views and the person calendar now show that partner, tagged with their day, and mark the hours with no one beside you. Overtime form (after a late punch out): shows the shift and how late the punch was, with full-width fields. Unit views: the month is shown once, above the day strip. Fixes: the Alerts entry in the menu on older site pages; a unit's second heading is shortened like the first."
     }
   }
 }
