@@ -11,7 +11,7 @@
   "version": {
     "license": "MIT",
     "release_notes": {
-      "en-US": "Your month gets the same Base dropdown as the unit views, beside the month picker: pick a base to keep only your shifts there, with the choice shared across views."
+      "en-US": "The Base dropdown starts on All bases on every page load instead of remembering the last choice."
     }
   }
 }
