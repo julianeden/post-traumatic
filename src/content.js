@@ -10,7 +10,7 @@
 // clock page it shows one big button and asks before an early punch.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
-// data-tsm-filter, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
+// data-tsm-base, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
 "use strict";
 
 (() => {
@@ -19,7 +19,7 @@
   const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   // Views listed in the first dropdown, by label after the prefix is removed.
-  const COMMON_VIEWS = ["individual month view", "available open shifts", "als", "bls", "details", "dispatch"];
+  const COMMON_VIEWS = ["individual month view", "available open shifts", "als", "bls", "details", "dispatch", "management"];
   const VIEW_PREFIX = /^vehicle\/location month view\s*-\s*/i;
   // Unit views searched, in order, for the crew on each of your shifts.
   const CREW_VIEWS = ["bls", "als", "details"];
@@ -1087,7 +1087,10 @@
     const monthSelect = document.getElementById("StartMonth");
     const yearSelect = document.getElementById("StartYear");
     const goButton = document.getElementById("submit_form");
-    if (monthSelect) monthSelect.closest("td")?.classList.add("tsm-toolbar-nav");
+    if (monthSelect) buildNavColumns(monthSelect, yearSelect);
+
+    const legend = row.querySelector(".calendar-legend");
+    if (legend) collapseLegend(legend);
 
     // The page's <form> is written inside a table row, so its controls are
     // only tied to it by a parser quirk. Tie them explicitly as well.
@@ -1141,7 +1144,7 @@
       more.classList.add("tsm-viewpick-more");
       const toggle = document.createElement("button");
       toggle.type = "button";
-      toggle.className = "tsm-viewpick-toggle";
+      toggle.className = "tsm-more-toggle tsm-viewpick-toggle";
       toggle.textContent = "See more view options";
       toggle.setAttribute("aria-expanded", "false");
       const show = (on) => {
@@ -1154,6 +1157,57 @@
       show(other.some((o) => o.selected));
     }
     cell.append(wrap);
+  }
+
+  // The month/year cell becomes two columns: the month picker with a
+  // "Change year" link under it (the year picker appears on tap), and a
+  // right column for the unit views' base picker with the colour-key link
+  // under it.
+  function buildNavColumns(monthSelect, yearSelect) {
+    const cell = monthSelect.closest("td");
+    if (!cell) return;
+    cell.classList.add("tsm-toolbar-nav");
+    const left = el("div", "tsm-nav-col tsm-nav-left");
+    const right = el("div", "tsm-nav-col tsm-nav-right");
+    left.append(monthSelect);
+    if (yearSelect) {
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "tsm-more-toggle tsm-year-toggle";
+      toggle.textContent = "Change year";
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.addEventListener("click", () => {
+        yearSelect.hidden = false;
+        toggle.hidden = true;
+        toggle.setAttribute("aria-expanded", "true");
+        yearSelect.focus();
+      });
+      yearSelect.hidden = true;
+      left.append(toggle, yearSelect);
+    }
+    cell.prepend(left, right);
+  }
+
+  // The time-off colour key is rarely needed, so it waits behind a link
+  // under the base picker and opens below the pickers.
+  function collapseLegend(legend) {
+    const cell = legend.closest("td") || legend.parentElement;
+    cell.classList.add("tsm-toolbar-legend");
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "tsm-more-toggle tsm-legend-toggle";
+    toggle.textContent = "Show color key";
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.addEventListener("click", () => {
+      legend.hidden = false;
+      cell.classList.add("tsm-legend-open");
+      toggle.hidden = true;
+      toggle.setAttribute("aria-expanded", "true");
+    });
+    legend.hidden = true;
+    const right = document.querySelector(".tsm-nav-right");
+    if (right) right.append(toggle);
+    else legend.before(toggle);
   }
 
   // Same as pressing the page's Go button.
@@ -1716,21 +1770,17 @@
     // it only on pages without one.
     const title = document.getElementById("StartMonth") ? null : el("div", "tsm-pager-title", (month.querySelector("td.monthname")?.textContent || "").trim());
 
+    // A week of day chips edge to edge; the strip scrolls for the rest.
     const nav = el("div", "tsm-nav");
-    const prev = navButton("‹", "Previous day");
-    const next = navButton("›", "Next day");
     const strip = el("div", "tsm-strip");
-    nav.append(prev, strip, next);
-
-    const filters = el("div", "tsm-filters");
-    filters.append(filterButton("All units", ""), filterButton("Open only", "open"));
+    nav.append(strip);
 
     const search = el("div", "tsm-search");
     const field = el("div", "tsm-search-field");
     const input = document.createElement("input");
     input.type = "search";
     input.className = "tsm-search-input";
-    input.placeholder = "Find a person, e.g. Bob Smith";
+    input.placeholder = "Find a person";
     input.autocomplete = "off";
     input.setAttribute("aria-label", "Show only units with this person");
     const clear = document.createElement("button");
@@ -1745,12 +1795,39 @@
     calBtn.textContent = "Calendar";
     calBtn.setAttribute("aria-pressed", "false");
     calBtn.setAttribute("aria-label", "Show this person's month as a calendar");
+    // Only useful once a name is typed.
+    calBtn.hidden = true;
     search.append(field, calBtn);
 
     const status = el("div", "tsm-status");
 
-    pager.append(...(title ? [title] : []), nav, filters, search, status);
+    pager.append(...(title ? [title] : []), nav, search, status);
     month.parentNode.insertBefore(pager, month);
+
+    // Base filter: a dropdown of the units' leading names ("Alpha 3W" and
+    // "Alpha 3" are at Alpha, "MWT-W1" at MWT), most units first, in the
+    // toolbar row with the month and year pickers. It is left out when the
+    // month has only one group.
+    const baseCounts = new Map();
+    for (const td of days) {
+      for (const unit of td.querySelectorAll(".tsm-unit")) {
+        const base = unitHeading(unit).replace(/\s*\(.*\)$/, "").split(/[\s-]/)[0] || "";
+        unit.dataset.tsmBase = base.toLowerCase();
+        if (base) baseCounts.set(base, (baseCounts.get(base) || 0) + 1);
+      }
+    }
+    const baseNames = [...baseCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n);
+    const baseSelect = document.createElement("select");
+    baseSelect.className = "tsm-baseselect";
+    baseSelect.setAttribute("aria-label", "Show only units at this base");
+    baseSelect.append(new Option("All bases", ""));
+    for (const n of baseNames) baseSelect.append(new Option(n, n.toLowerCase()));
+    baseSelect.addEventListener("change", () => setBase(baseSelect.value));
+    if (baseNames.length > 1) {
+      const right = document.querySelector(".tsm-nav-right");
+      if (right) right.prepend(baseSelect);
+      else pager.insertBefore(baseSelect, nav);
+    }
 
     // Month grid for the person being searched for, shown in place of the
     // day strip and unit list while data-tsm-cal is on.
@@ -1820,29 +1897,44 @@
       days[current].classList.add("tsm-selected");
       chips[current].classList.add("tsm-chip-selected");
       chips[current].scrollIntoView({ inline: "center", block: "nearest", behavior: scroll ? "smooth" : "instant" });
-      prev.disabled = current === 0;
-      next.disabled = current === days.length - 1;
       updateStatus();
     }
 
-    function setFilter(name) {
-      if (name) html.dataset.tsmFilter = name;
-      else delete html.dataset.tsmFilter;
-      for (const b of filters.querySelectorAll(".tsm-filter")) {
-        b.classList.toggle("tsm-filter-active", b.dataset.filter === name);
-      }
+    // Shows only that base's units; the day chips' open counts follow.
+    function setBase(key) {
+      if (key) html.dataset.tsmBase = key;
+      else delete html.dataset.tsmBase;
+      baseSelect.value = key;
+      days.forEach((td, i) => {
+        let open = 0;
+        for (const unit of td.querySelectorAll(".tsm-unit")) {
+          const match = !key || unit.dataset.tsmBase === key;
+          unit.classList.toggle("tsm-base-match", match);
+          if (match) open += unit.querySelectorAll("tr.unassigned").length;
+        }
+        td.dataset.openShown = String(open);
+        let badge = chips[i].querySelector(".tsm-chip-open");
+        if (open && !badge) {
+          badge = el("span", "tsm-chip-open");
+          chips[i].querySelector(".tsm-chip-num").after(badge);
+        }
+        if (badge) {
+          badge.textContent = String(open);
+          badge.hidden = open === 0;
+        }
+      });
       try {
-        localStorage.setItem("tsm.filter", name);
+        localStorage.setItem("tsm.base", key);
       } catch {
         // storage may be unavailable; the filter still applies for this page
       }
       updateStatus();
     }
 
-    function savedFilter() {
+    function savedBase() {
       try {
-        const v = localStorage.getItem("tsm.filter") || "";
-        return v === "open" || v === "mine" ? v : "";
+        const v = localStorage.getItem("tsm.base") || "";
+        return baseNames.some((n) => n.toLowerCase() === v) ? v : "";
       } catch {
         return "";
       }
@@ -1856,6 +1948,8 @@
       if (words.length > 0) html.dataset.tsmName = "on";
       else delete html.dataset.tsmName;
       search.classList.toggle("tsm-search-active", words.length > 0);
+      calBtn.hidden = words.length === 0;
+      if (words.length === 0 && html.dataset.tsmCal) setCalendarMode(false);
 
       let total = 0;
       days.forEach((td, i) => {
@@ -1893,13 +1987,16 @@
       updateStatus();
     }
 
+    // The status line shows only while a name is being searched or the
+    // list is empty.
     function updateStatus() {
       if (current < 0) return;
       const td = days[current];
       const units = td.querySelectorAll(".tsm-unit");
       const visible = [...units].filter((u) => u.offsetParent !== null).length;
-      const open = Number(td.dataset.open || 0);
-      const filter = html.dataset.tsmFilter || "";
+      const base = html.dataset.tsmBase || "";
+      const baseLabel = base ? baseSelect.selectedOptions[0]?.textContent || base : "";
+      const pool = [...units].filter((u) => !base || u.classList.contains("tsm-base-match"));
       const parts = [];
       if (query) {
         const total = matchesByDay.reduce((a, b) => a + b, 0);
@@ -1909,12 +2006,11 @@
           : `“${query}”: ${total} shift${total === 1 ? "" : "s"} on ${dayCount} day${dayCount === 1 ? "" : "s"} this month.`);
       }
       if (units.length === 0) parts.push("Nothing scheduled.");
+      else if (pool.length === 0) parts.push(`No ${baseLabel} units on this day.`);
       else if (visible === 0 && query && matchesByDay[current] === 0) parts.push("Not on this day.");
-      else if (visible === 0 && filter === "open") parts.push("No open shifts you can request on this day.");
-      else if (visible === 0 && filter === "mine") parts.push("No shifts of yours on this day.");
       else if (query) parts.push(`On ${visible} unit${visible === 1 ? "" : "s"} this day.`);
-      else parts.push(`${visible} of ${units.length} units · ${open} open shift${open === 1 ? "" : "s"}`);
       status.textContent = parts.join(" ");
+      status.hidden = parts.length === 0;
     }
 
     function setCalendarMode(on) {
@@ -2065,7 +2161,7 @@
     }
 
     // Called once the signed-in name is known: flags their slots, dots the
-    // day chips, and adds the "Mine" filter.
+    // day chips.
     function setUser(userName) {
       if (userKnown) return;
       userKnown = true;
@@ -2073,17 +2169,8 @@
       mineByDay.forEach((n, i) => {
         if (n) chips[i].append(el("span", "tsm-chip-mine"));
       });
-      const mineBtn = filterButton("Mine", "mine");
-      mineBtn.addEventListener("click", () => setFilter("mine"));
-      filters.append(mineBtn);
-      if (savedFilter() === "mine") setFilter("mine");
     }
 
-    prev.addEventListener("click", () => select(current - 1));
-    next.addEventListener("click", () => select(current + 1));
-    for (const b of filters.querySelectorAll(".tsm-filter")) {
-      b.addEventListener("click", () => setFilter(b.dataset.filter));
-    }
     let debounce = 0;
     input.addEventListener("input", () => {
       clearTimeout(debounce);
@@ -2109,8 +2196,7 @@
       if (e.key === "Escape") closePopup();
     });
 
-    const saved = savedFilter();
-    setFilter(saved === "mine" ? "" : saved);
+    setBase(savedBase());
 
     const todayIndex = days.findIndex((td) => td.classList.contains("tsm-today"));
     select(todayIndex >= 0 ? todayIndex : 0, { scroll: false });
@@ -2222,21 +2308,4 @@
     return node;
   }
 
-  function navButton(text, label) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "tsm-navbtn";
-    b.textContent = text;
-    b.setAttribute("aria-label", label);
-    return b;
-  }
-
-  function filterButton(text, name) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "tsm-filter";
-    b.dataset.filter = name;
-    b.textContent = text;
-    return b;
-  }
 })();

@@ -7,7 +7,8 @@ Phone widths only (820px and under), except the login username.
 - **Schedule** is split into Schedule and More Options tabs.
 - **More Options pages** (substitutions, trades, time off, pickups) show just that form, laid out as cards, under a Back button.
 - **Your month** is a day-by-day agenda with a Today button. Each shift shows your partner or an open seat, with a "See spares" list. A partner who joins after midnight is found under the next day, and any stretch with no one beside you is marked.
-- **Unit views** (BLS, ALS, Details) show one day at a time, with open-shift counts per day, All / Open only / Mine filters, Find a person and a per-person calendar. A seat that runs through midnight also shows the seat listed under the next day that joins it, and the hours with no one beside it.
+- **Unit views** (BLS, ALS, Details) show one day at a time under a week strip with open-shift counts per day, a Base dropdown (Alpha, Bravo, Echo…), Find a person and a per-person calendar. A seat that runs through midnight also shows the seat listed under the next day that joins it, and the hours with no one beside it.
+- **Colour key** for time off waits behind a "Show color key" button on every schedule view.
 - **Open shifts** you can take are green Request buttons. The site's own confirmation still runs.
 - **Dispatch view** marks who is on right now, including last night's shifts that run past midnight, and names the positions Supervisor, Day, Eve, Night and Training.
 - **Work orders and checklists** are one column with full-width controls.

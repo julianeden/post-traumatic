@@ -918,7 +918,7 @@ for (const { file, asDispatch } of jobs) {
     if (!revealed.more || revealed.toggle || revealed.label !== "Other Schedule Views" || revealed.options !== toolbar.otherOpts.length) fail(`button did not reveal the other views as before: ${JSON.stringify(revealed)}`);
     if (toolbar.goVisible) fail("Go button still visible");
     if (toolbar.commonOpts.some((t) => /Vehicle\/Location/i.test(t)) || toolbar.otherOpts.some((t) => /Vehicle\/Location/i.test(t))) fail("prefix not stripped from view names");
-    const expectedCommon = ["Individual Month View", "Available Open Shifts", "ALS", "BLS", "Details", "Dispatch"];
+    const expectedCommon = ["Individual Month View", "Available Open Shifts", "ALS", "BLS", "Details", "Dispatch", "Management"];
     if (JSON.stringify(toolbar.commonOpts) !== JSON.stringify(expectedCommon)) fail(`common views are ${toolbar.commonOpts.join(", ")}`);
 
     // choose BLS in the common picker
@@ -941,6 +941,56 @@ for (const { file, asDispatch } of jobs) {
     });
     if (month !== 2) fail("changing the month did not submit the form");
     else console.log(`  view change and month change both submitted the form (${bls.submits[0].replace(/^.*main\.php/, "main.php")})`);
+  }
+
+  // The time-off colour key waits behind a small button.
+  if (await page.locator(".calendar-legend").count()) {
+    const key = await page.evaluate(() => ({
+      legendShown: Boolean(document.querySelector(".calendar-legend")?.offsetParent),
+      toggle: document.querySelector(".tsm-legend-toggle")?.textContent,
+      toggleShown: Boolean(document.querySelector(".tsm-legend-toggle")?.offsetParent),
+    }));
+    if (key.legendShown || !key.toggleShown || key.toggle !== "Show color key") fail(`colour key should wait behind a button: ${JSON.stringify(key)}`);
+    // The year picker waits behind "Change year" under the month picker;
+    // the colour-key link sits level with it in the right column.
+    const nav = await page.evaluate(() => {
+      const r = (el) => el ? el.getBoundingClientRect() : null;
+      const month = r(document.getElementById("StartMonth"));
+      const year = document.getElementById("StartYear");
+      const yearToggle = document.querySelector(".tsm-year-toggle");
+      const keyToggle = document.querySelector(".tsm-legend-toggle");
+      const base = document.querySelector(".tsm-baseselect");
+      return {
+        yearShown: Boolean(year?.offsetParent),
+        yearToggle: yearToggle?.textContent, yearToggleShown: Boolean(yearToggle?.offsetParent),
+        yearToggleUnderMonth: yearToggle && month ? r(yearToggle).top >= month.bottom && r(yearToggle).right <= month.right + 1 : false,
+        keyInRight: Boolean(keyToggle?.closest(".tsm-nav-right")),
+        keyLevel: yearToggle && keyToggle ? Math.abs(r(yearToggle).top - r(keyToggle).top) <= 2 : false,
+        baseRightOfMonth: base && month ? r(base).left > month.right && Math.abs(r(base).top - month.top) <= 2 : null,
+        keyUnderBase: base && keyToggle ? r(keyToggle).top >= r(base).bottom : null,
+      };
+    });
+    if (nav.yearShown || !nav.yearToggleShown || nav.yearToggle !== "Change year" || !nav.yearToggleUnderMonth) fail(`year picker should wait behind a link under the month: ${JSON.stringify(nav)}`);
+    if (!nav.keyInRight || !nav.keyLevel) fail(`colour-key link should sit in the right column level with Change year: ${JSON.stringify(nav)}`);
+    if (nav.baseRightOfMonth === false || nav.keyUnderBase === false) fail(`base picker should sit right of the month with the colour-key link under it: ${JSON.stringify(nav)}`);
+    await page.locator(".tsm-year-toggle").click();
+    await page.waitForTimeout(100);
+    const yearOpen = await page.evaluate(() => ({ yearShown: Boolean(document.getElementById("StartYear")?.offsetParent), toggleShown: Boolean(document.querySelector(".tsm-year-toggle")?.offsetParent), right: Math.round(document.getElementById("StartYear").getBoundingClientRect().right) }));
+    if (!yearOpen.yearShown || yearOpen.toggleShown || yearOpen.right > VIEWPORT.width) fail(`Change year did not reveal the year picker cleanly: ${JSON.stringify(yearOpen)}`);
+    console.log(`  pickers: month with "${nav.yearToggle}" under it${nav.baseRightOfMonth ? ", base picker beside it" : ""}, colour-key link level with it; year picker opens on tap`);
+    await page.evaluate(() => { document.getElementById("StartYear").hidden = true; document.querySelector(".tsm-year-toggle").hidden = false; });
+    await page.locator(".tsm-legend-toggle").click();
+    await page.waitForTimeout(100);
+    const shown = await page.evaluate(() => ({
+      legendShown: Boolean(document.querySelector(".calendar-legend")?.offsetParent),
+      toggleShown: Boolean(document.querySelector(".tsm-legend-toggle")?.offsetParent),
+      items: document.querySelectorAll(".calendar-legend-item").length,
+      right: Math.round(document.querySelector(".calendar-legend").getBoundingClientRect().right),
+    }));
+    if (!shown.legendShown || shown.toggleShown || shown.right > VIEWPORT.width) fail(`colour key did not open cleanly: ${JSON.stringify(shown)}`);
+    console.log(`  colour key: hidden behind "${key.toggle}", opens with ${shown.items} items`);
+    await page.screenshot({ path: join(outDir, `${name}-after-color-key.png`) });
+    await page.evaluate(() => { document.querySelector(".calendar-legend").hidden = true; document.querySelector(".tsm-legend-toggle").hidden = false; });
   }
 
   if (after.mode === "agenda" && blsHtml) {
@@ -1139,24 +1189,91 @@ for (const { file, asDispatch } of jobs) {
   await page.screenshot({ path: join(outDir, `${name}-after-calendar.png`) });
 
   if (after.mode === "location") {
-    const openBtn = page.locator(".tsm-filter", { hasText: "Open only" });
-    if (await openBtn.count()) {
-      await openBtn.click();
+    // The pager: a week of day chips with no arrows or filter buttons, and
+    // nothing under the search field until a name is typed.
+    const pagerCheck = await page.evaluate(() => {
+      const day = document.querySelector('td[id^="day_"].tsm-selected');
+      const units = [...day.querySelectorAll(".tsm-unit")];
+      const strip = document.querySelector(".tsm-strip").getBoundingClientRect();
+      const chips = [...document.querySelectorAll(".tsm-chip")].map((c) => c.getBoundingClientRect()).filter((r) => r.left >= strip.left && r.right <= strip.right + 1);
+      return {
+        visible: units.filter((u) => u.offsetParent !== null).length, units: units.length,
+        arrows: document.querySelectorAll(".tsm-navbtn").length, filters: document.querySelectorAll(".tsm-filter, .tsm-filters").length, chipsAcross: chips.length,
+        statusShown: Boolean(document.querySelector(".tsm-status")?.offsetParent), statusText: document.querySelector(".tsm-status")?.textContent,
+        calShown: Boolean(document.querySelector(".tsm-calbtn")?.offsetParent),
+        selected: document.querySelector(".tsm-chip-selected")?.textContent,
+      };
+    });
+    if (pagerCheck.arrows || pagerCheck.filters || pagerCheck.chipsAcross !== 7) fail(`pager should be a week of chips alone: ${pagerCheck.arrows} arrows, ${pagerCheck.filters} filter controls, ${pagerCheck.chipsAcross} chips across`);
+    if (pagerCheck.visible > 0 && pagerCheck.statusShown) fail(`status line shown without a search: "${pagerCheck.statusText}"`);
+    if (pagerCheck.calShown) fail("Calendar button shown with nothing typed");
+    console.log(`  pager: ${pagerCheck.chipsAcross} day chips across, ${pagerCheck.visible} of ${pagerCheck.units} units on the selected day`);
+    // tapping the next chip moves on a day
+    await page.locator(".tsm-chip.tsm-chip-selected + .tsm-chip").click();
+    await page.waitForTimeout(200);
+    const moved = await page.evaluate(() => document.querySelector(".tsm-chip-selected")?.textContent);
+    if (moved === pagerCheck.selected) fail("tapping the next chip did not change the day");
+    await page.screenshot({ path: join(outDir, `${name}-after-next-day.png`) });
+
+    // Base filter: a dropdown of the leading unit names, most units first,
+    // in the toolbar row with the month and year pickers; one base leaves
+    // only its units and the day chips count that base's open shifts.
+    const baseOf = (text) => text.replace(/\s*\(.*\)$/, "").split(/[\s-]/)[0];
+    const bases = await page.evaluate((baseOfSrc) => {
+      const baseOf = new Function(`return (${baseOfSrc})`)();
+      const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      const counts = new Map();
+      const openBy = {};
+      for (const td of document.querySelectorAll('table.month td[id^="day_"]')) {
+        for (const u of td.querySelectorAll(".tsm-unit")) {
+          const h = u.querySelector("div.location");
+          const base = baseOf(h.dataset.tsmFull || tidy(h.textContent));
+          counts.set(base, (counts.get(base) || 0) + 1);
+          openBy[`${td.id}|${base}`] = (openBy[`${td.id}|${base}`] || 0) + u.querySelectorAll("tr.unassigned").length;
+        }
+      }
+      return {
+        expected: ["All bases", ...[...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n)],
+        shown: [...document.querySelectorAll(".tsm-baseselect option")].map((o) => o.textContent),
+        inLegendCell: Boolean(document.querySelector(".tsm-nav-right > .tsm-baseselect:first-child")),
+        selectRight: Math.round(document.querySelector(".tsm-baseselect")?.getBoundingClientRect().right ?? 0),
+        openBy,
+        groups: counts.size,
+        dayIds: [...document.querySelectorAll('table.month td[id^="day_"]')].map((td) => td.id),
+      };
+    }, baseOf.toString());
+    const chipCounts = () => page.evaluate(() => [...document.querySelectorAll(".tsm-chip")].map((c) => { const b = c.querySelector(".tsm-chip-open"); return b && !b.hidden ? Number(b.textContent) : 0; }));
+    if (bases.groups > 1) {
+      if (JSON.stringify(bases.shown) !== JSON.stringify(bases.expected)) fail(`base options read ${bases.shown.join(", ")}, expected ${bases.expected.join(", ")}`);
+      if (!bases.inLegendCell) fail("base dropdown is not at the top of the right column beside the month");
+      if (bases.selectRight > VIEWPORT.width) fail(`base dropdown overflows: right ${bases.selectRight}`);
+      const pick = bases.expected[1];
+      const chooseBase = (value) => page.evaluate((v) => { const s = document.querySelector(".tsm-baseselect"); s.value = v; s.dispatchEvent(new Event("change", { bubbles: true })); }, value);
+      await chooseBase(pick.toLowerCase());
       await page.waitForTimeout(200);
-      const check = await page.evaluate(() => {
+      const picked = await page.evaluate(([base, baseOfSrc]) => {
+        const baseOf = new Function(`return (${baseOfSrc})`)();
+        const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
         const day = document.querySelector('td[id^="day_"].tsm-selected');
-        const units = [...day.querySelectorAll(".tsm-unit")];
-        const visible = units.filter((u) => u.offsetParent !== null);
-        return { visible: visible.length, bad: visible.filter((u) => !u.querySelector("tr.unassigned")).length, open: Number(day.dataset.open) };
-      });
-      if (check.bad) fail(`"Open only" shows ${check.bad} units without a requestable slot`);
-      console.log(`  open-only filter: ${check.visible} units visible, ${check.open} open slots on selected day`);
-      await page.screenshot({ path: join(outDir, `${name}-after-open-only.png`) });
-      // next day, then reset filter
-      await page.locator(".tsm-navbtn").last().click();
+        const visible = [...day.querySelectorAll(".tsm-unit")].filter((u) => u.offsetParent !== null);
+        const wrong = visible.filter((u) => { const h = u.querySelector("div.location"); return baseOf(h.dataset.tsmFull || tidy(h.textContent)) !== base; }).length;
+        return { visible: visible.length, wrong, stored: localStorage.getItem("tsm.base"), attr: document.documentElement.dataset.tsmBase };
+      }, [pick, baseOf.toString()]);
+      const expectedChips = bases.dayIds.map((id) => bases.openBy[`${id}|${pick}`] || 0);
+      const chips = await chipCounts();
+      if (picked.wrong) fail(`base "${pick}" shows ${picked.wrong} units of other bases`);
+      if (picked.attr !== pick.toLowerCase() || picked.stored !== pick.toLowerCase()) fail(`base choice not applied or stored: ${JSON.stringify(picked)}`);
+      if (JSON.stringify(chips) !== JSON.stringify(expectedChips)) fail(`day chips under base "${pick}": ${chips.join(",")}, expected ${expectedChips.join(",")}`);
+      console.log(`  base filter: ${bases.expected.length - 1} bases (${bases.expected.slice(1, 6).join(", ")}); "${pick}" leaves ${picked.visible} units on the selected day`);
+      await page.screenshot({ path: join(outDir, `${name}-after-base.png`) });
+      await chooseBase("");
       await page.waitForTimeout(200);
-      await page.screenshot({ path: join(outDir, `${name}-after-next-day.png`) });
-      await page.locator(".tsm-filter", { hasText: "All units" }).click();
+      const reset = await page.evaluate(() => ({ attr: document.documentElement.dataset.tsmBase || "", totals: [...document.querySelectorAll('table.month td[id^="day_"]')].map((td) => Number(td.dataset.open || 0)) }));
+      const chipsAfter = await chipCounts();
+      if (reset.attr || JSON.stringify(chipsAfter) !== JSON.stringify(reset.totals)) fail(`All bases did not restore the chips: ${JSON.stringify({ ...reset, chipsAfter })}`);
+    } else {
+      if (bases.inLegendCell) fail("base dropdown shown although all units share one base");
+      console.log("  (one base only; base filter not shown)");
     }
 
     // Person filter: pick a crew member who appears on several days and type
@@ -1181,9 +1298,11 @@ for (const { file, asDispatch } of jobs) {
         const bad = visible.filter((u) => !u.querySelector("tr.tsm-match-slot")).length;
         const highlighted = day.querySelectorAll("tr.tsm-match-slot").length;
         const daysWithBadge = document.querySelectorAll(".tsm-chip-has-match").length;
-        return { visible: visible.length, bad, highlighted, daysWithBadge, status: document.querySelector(".tsm-status")?.textContent };
+        const openShown = [...document.querySelectorAll(".tsm-chip-open")].filter((b) => b.offsetParent).length;
+        return { visible: visible.length, bad, highlighted, daysWithBadge, openShown, status: document.querySelector(".tsm-status")?.textContent };
       });
       if (!check.daysWithBadge) fail(`person filter "${person}" matched no days`);
+      if (check.openShown) fail(`${check.openShown} open-shift badges still shown on the chips during a search`);
       if (check.visible === 0) fail(`person filter "${person}" left no visible units on the selected day`);
       if (check.bad) fail(`person filter shows ${check.bad} units without that person`);
       console.log(`  person filter "${person}": ${check.visible} units visible, ${check.highlighted} highlighted, ${check.daysWithBadge} days flagged; status: ${check.status}`);
@@ -1414,16 +1533,13 @@ for (const { file, asDispatch } of jobs) {
         console.log("  (no seat starting at midnight after an overnight seat on the same unit; midnight cards not exercised)");
       }
 
-      // Calendar with nothing typed: no dots, a hint instead.
-      await page.locator(".tsm-calbtn").click();
-      await page.waitForTimeout(200);
-      const empty = await page.evaluate(() => ({
-        dotted: document.querySelectorAll(".tsm-cal-has").length,
-        caption: document.querySelector(".tsm-cal-caption")?.textContent || "",
+      // With nothing typed the Calendar button and status line are away.
+      const idle = await page.evaluate(() => ({
+        calShown: Boolean(document.querySelector(".tsm-calbtn")?.offsetParent),
+        calMode: Boolean(document.documentElement.dataset.tsmCal),
+        statusShown: Boolean(document.querySelector(".tsm-status")?.offsetParent),
       }));
-      if (empty.dotted || !/type a name/i.test(empty.caption)) fail(`empty calendar: ${empty.dotted} dotted days, caption "${empty.caption}"`);
-      await page.locator(".tsm-calbtn").click();
-      await page.waitForTimeout(200);
+      if (idle.calShown || idle.calMode || idle.statusShown) fail(`after clearing the search: ${JSON.stringify(idle)}`);
     }
 
     // The site's own confirm dialog, opened directly (no network involved).

@@ -61,8 +61,10 @@ the page no longer overflows, that the individual view's crew lines come from a 
 formed request for the BLS view (answered with the saved BLS page for the
 same month) and that each card's partners, open seats and hours without a
 partner, and its spares list, match an independent reading of that page, that the pickup handlers are untouched, that the location
-view shows exactly one day with a chip per day, that the "Open only" and
-person filters hide the right units, that the person calendar's dots agree
+view shows exactly one day with a chip per day, that the colour key waits
+behind its button, that the Base dropdown lists the units' leading names and
+one base leaves only its units with the day chips recounted, that the
+person filter hides the right units, that the person calendar's dots agree
 with the day chips and its shift card matches the day's own unit list, that
 the confirmation dialog fits the viewport, that a unit view (run once as itself and once standing in for the Dispatch view) carries seats across midnight and marks the hours alone, and that the punch clock page
 shows one button, does not scroll, asks before early punches (the fixture's
