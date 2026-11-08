@@ -60,6 +60,11 @@ async function serveFixtures(context, blocked) {
       if (path && path.startsWith(fixtures) && existsSync(path)) {
         const type = basename(path) === "login" ? "text/html" : TYPES[extname(path).toLowerCase()] || "application/octet-stream";
         let body = readFileSync(path);
+        // A page saved while only the header chrome was active carries the
+        // add-on's bar; drop it so the script builds its own.
+        if (/\.html?$/i.test(path) && body.includes("tsm-topnav")) {
+          body = Buffer.from(body.toString("utf8").replace(/<nav class="tsm-topnav"[^>]*>[\s\S]*?<\/nav>/, "").replace(/ data-tsm-chrome="on"/, ""), "utf8");
+        }
         // Punch page variants: "now" moves the server clock the page embeds;
         // "punched=in" rewrites the page the way the site does once you are
         // punched in (controls swapped, current shift filled in).
@@ -178,6 +183,64 @@ async function checkFormPage(page, name, after) {
     console.log(`  odometer rules: ${st.odo.cls} → after shift change: ${again}`);
   }
   await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
+}
+
+// The overtime form the site serves after a late punch out: a summary card
+// built from the page's own shift facts, stacked full-width fields, the
+// reason-specific rows still appearing, and a full-width Submit.
+async function checkOvertimePage(page, name, after) {
+  if (!after.active) fail("add-on did not activate on the overtime form");
+  if (after.scrollWidth > VIEWPORT.width) fail(`overtime form overflows: scrollWidth ${after.scrollWidth}`);
+  if (after.overflowing.length) fail(`overtime form elements past the right edge: ${after.overflowing.join(" | ")}`);
+  const read = () => page.evaluate(() => {
+    const vis = (el) => Boolean(el) && el.offsetParent !== null && el.getBoundingClientRect().width > 0;
+    const fields = [...document.querySelectorAll("#form1 input:not([type=hidden]):not([type=submit]), #form1 select, #form1 textarea")].filter(vis);
+    return {
+      heading: document.querySelector(".tsm-ot-heading")?.textContent.trim(),
+      summary: [...document.querySelectorAll(".tsm-ot-summary .tsm-ot-sum-row")].map((r) => [...r.children].map((c) => c.textContent.trim()).join(" ")),
+      factsShown: [...document.querySelectorAll("tr.tsm-ot-fact")].filter(vis).length,
+      titleRowShown: vis(document.querySelector("tr.tsm-ot-title")),
+      fields: fields.map((f) => `${f.tagName.toLowerCase()}#${f.id || f.name}`),
+      small: fields.filter((f) => f.getBoundingClientRect().width < 300 || parseFloat(getComputedStyle(f).fontSize) < 16).map((f) => `${f.id} ${Math.round(f.getBoundingClientRect().width)}px/${getComputedStyle(f).fontSize}`),
+      labels: [...document.querySelectorAll("td.tsm-ot-label")].filter(vis).map((c) => c.textContent.replace(/\s+/g, " ").trim()),
+      submit: [...document.querySelectorAll('#form1 input[type="submit"]')].filter(vis).map((b) => Math.round(b.getBoundingClientRect().width)),
+      requiredStar: vis(document.querySelector(".required_comments")),
+      height: document.documentElement.scrollHeight,
+    };
+  });
+  let st = await read();
+  if (st.heading !== "Overtime/Extra Hours Authorization Form") fail(`overtime heading reads "${st.heading}"`);
+  if (st.titleRowShown || st.factsShown) fail(`the site's title row or fact rows are still shown (${st.factsShown} facts)`);
+  if (st.summary.length !== 2 || st.summary[0] !== "Shift Sat Nov 7 · 10:00 – 18:00" || st.summary[1] !== "Punched out 19:25 1 h 25 min after the shift ended") fail(`summary card reads ${JSON.stringify(st.summary)}`);
+  if (JSON.stringify(st.fields) !== JSON.stringify(["select#reason", "textarea#comments"])) fail(`fields shown at first: ${st.fields.join(", ")}`);
+  if (st.small.length) fail(`overtime fields too narrow or small: ${st.small.join(", ")}`);
+  if (st.labels.some((l) => /:$/.test(l))) fail(`labels still end in a colon: ${st.labels.join(" | ")}`);
+  if (!st.submit.length || st.submit.some((w) => w < 300)) fail(`overtime submit: ${st.submit.join(", ") || "none visible"}`);
+  console.log(`  overtime form: "${st.heading}" · ${st.summary.join(" / ")} · fields ${st.fields.join(", ")} · submit ${st.submit.join("/")}px · ${st.height}px tall`);
+  await page.screenshot({ path: join(outDir, `${name}-after.png`) });
+  await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
+
+  // A reason the site attaches questions to shows those rows, full width.
+  await page.selectOption("#reason", "On a Call");
+  await page.waitForTimeout(150);
+  st = await read();
+  const onCall = ["select#reason", "input#run_number", "input#patient_name", "input#patient_address", "input#pickup_location", "textarea#comments"];
+  if (JSON.stringify(st.fields) !== JSON.stringify(onCall)) fail(`On a Call fields: ${st.fields.join(", ")}`);
+  if (st.small.length) fail(`On a Call fields too narrow or small: ${st.small.join(", ")}`);
+  if (st.labels.some((l) => /:$/.test(l))) fail(`On a Call labels still end in a colon: ${st.labels.join(" | ")}`);
+  console.log(`  On a Call: ${st.fields.length} fields · labels ${st.labels.join(" · ")}`);
+  await page.screenshot({ path: join(outDir, `${name}-after-oncall.png`), fullPage: true });
+  await page.selectOption("#reason", "Other");
+  await page.waitForTimeout(150);
+  st = await read();
+  if (!st.requiredStar) fail("Other: comments not marked required");
+  if (JSON.stringify(st.fields) !== JSON.stringify(["select#reason", "textarea#comments"])) fail(`Other fields: ${st.fields.join(", ")}`);
+  // Submitting with no reason stays on the page: the site's validator alerts.
+  await page.selectOption("#reason", "");
+  await page.locator('#form1 input[type="submit"]').click();
+  await page.waitForTimeout(300);
+  if (!(await page.evaluate(() => Boolean(document.getElementById("form1"))))) fail("submitting with no reason left the page");
+  console.log("  Other marks comments required; an empty submit stays on the page");
 }
 
 // Punch clock page: one big button, nothing else to scroll, and the
@@ -577,6 +640,7 @@ for (const file of pages) {
       footerShown: Boolean(document.getElementById("footer")?.offsetParent),
       punchPage: Boolean(document.getElementById("punchin_form")),
       formPage: html.dataset.tsmPage === "form" || html.dataset.tsmPage === "fleet",
+      overtimePage: html.dataset.tsmPage === "overtime",
     };
   });
   if (after.active && after.footerShown) fail("the copyright footer is still shown");
@@ -607,7 +671,8 @@ for (const file of pages) {
     // after Punch Clock whose tap triggers the hidden bell.
     if (after.bell !== null && await page.locator('button[title="All Menus"]').count()) {
       const ham = await page.evaluate(() => {
-        const id = document.querySelector('button[title="All Menus"]').getAttribute("aria-controls");
+        const burger = document.querySelector('button[title="All Menus"]');
+        const id = burger.getAttribute("aria-controls") || burger.getAttribute("aria-owns");
         const list = document.getElementById(id)?.querySelector(".v-list");
         const items = list ? [...list.querySelectorAll("a.ts_menu_list_item")].map((a) => a.textContent.trim()) : [];
         const alerts = document.getElementById("tsm-alerts-item");
@@ -658,6 +723,8 @@ for (const file of pages) {
 
   if (after.punchPage) {
     await checkPunchPage(page, file);
+  } else if (after.overtimePage) {
+    await checkOvertimePage(page, name, after);
   } else if (after.formPage) {
     await checkFormPage(page, name, after);
   } else if (!before.hasMonth) {

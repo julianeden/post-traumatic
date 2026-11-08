@@ -69,8 +69,10 @@ server clock is moved and a punched-in state synthesised for the variants)
 and hands non-early punches to the site's handler, that the top bar has its
 four buttons with working menus and the rest of the header hidden, and that
 the form pages fit the phone with full-width controls and an odometer field
-that keeps no upper limit even after a shift change. Screenshots of every state
-land in `test/out/`.
+that keeps no upper limit even after a shift change, and that the overtime
+form (served after a late punch out) shows its summary card, stacks its
+fields full width and still reveals the reason-specific rows. Screenshots of
+every state land in `test/out/`.
 
 ## iPhone: the userscript build
 

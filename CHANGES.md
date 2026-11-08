@@ -13,5 +13,6 @@ Phone widths only (820px and under), except the login username.
 - **Work orders and checklists** are one column with full-width controls.
 - **Odometer** accepts any reading at or above the last one.
 - **Punch clock** is one big button. More than 7 minutes early asks first.
+- **Overtime form** (after a late punch out) shows the shift and how late the punch was, with full-width fields.
 - **Dialogs** fit the phone.
 - **Privacy**: nothing leaves traumasoft.com.

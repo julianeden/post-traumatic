@@ -119,6 +119,7 @@
       [() => document.getElementById("punchin_form"), initPunchPage, "punch page"],
       [() => document.getElementById("formID"), initFormPage, "form page"],
       [() => document.getElementById("vehicle_maintenance_request_dialog_form"), initFleetPage, "fleet form"],
+      [isReasonFormDom, initOvertimePage, "overtime form"],
       [isSchedulePageDom, init, "schedule"],
     ];
     for (const [test, start, label] of pages) {
@@ -195,7 +196,8 @@
   // panel the hidden bell button controls.
   function addAlertsItem(burger) {
     const bell = document.getElementById("notifications_button");
-    const listId = burger?.getAttribute("aria-controls");
+    // Older Vuetify builds (the legacy form pages) use aria-owns instead.
+    const listId = burger?.getAttribute("aria-controls") || burger?.getAttribute("aria-owns");
     const list = listId && document.getElementById(listId)?.querySelector(".v-list");
     if (!bell || !list || list.querySelector("#tsm-alerts-item")) return;
     const links = [...list.querySelectorAll("a.ts_menu_list_item[href]")].filter((a) => !/logout/i.test(a.href));
@@ -422,6 +424,126 @@
     html.dataset.tsmPage = "fleet";
     html.dataset.tsmReady = "1";
     diag.log("fleet maintenance form");
+  }
+
+  // ---- overtime form: the reason the site asks for after a late punch -----
+
+  // The form the site answers a late punch out with ("Overtime/Extra Hours
+  // Authorization Form"): a 650px table of label/value rows. The shift facts
+  // become a summary card, each field gets its label above it, spacer rows
+  // go, and the site's own reason logic (extra rows for some reasons) keeps
+  // working on the same rows.
+  function isReasonFormDom() {
+    const form = document.getElementById("form1");
+    return Boolean(form && /uload=forms\//.test(form.getAttribute("action") || "") && form.querySelector("select, textarea"));
+  }
+
+  function initOvertimePage() {
+    const form = document.getElementById("form1");
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "overtime";
+    html.dataset.tsmReady = "1";
+    form.classList.add("tsm-ot");
+    const facts = [];
+    let heading = null;
+    for (const tr of form.querySelectorAll("tr")) {
+      const cells = [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName));
+      if (!cells.length) continue;
+      if (cells.some((c) => c.classList.contains("std_header"))) {
+        tr.classList.add("tsm-ot-title");
+        if (!heading) {
+          heading = el("h1", "tsm-ot-heading", tidy(tr.textContent));
+          form.prepend(heading);
+        }
+        continue;
+      }
+      const field = tr.querySelector("input:not([type=hidden]), select, textarea");
+      if (!field) {
+        if (cells.length < 2 || !tidy(tr.textContent)) {
+          tr.classList.add("tsm-ot-blank");
+        } else {
+          tr.classList.add("tsm-ot-fact");
+          facts.push({ label: tidy(cells[0].textContent).replace(/:$/, ""), value: tidy(cells[1].textContent) });
+        }
+        continue;
+      }
+      tr.classList.add(field.type === "submit" ? "tsm-ot-submit" : "tsm-ot-field");
+      if (cells.length > 1) {
+        cells[0].classList.add("tsm-ot-label");
+        unColon(cells[0]);
+      }
+    }
+    const summary = overtimeSummary(facts);
+    if (summary) {
+      form.classList.add("tsm-ot-summarised");
+      if (heading) heading.after(summary);
+      else form.prepend(summary);
+    }
+    diag.log(`overtime form · ${facts.length} facts · summary ${summary ? "built" : "not built"}`);
+  }
+
+  // "Run Number:" -> "Run Number"; the label sits on its own line now.
+  function unColon(cell) {
+    const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+    let last = null;
+    while (walker.nextNode()) if (tidy(walker.currentNode.textContent)) last = walker.currentNode;
+    if (last) last.textContent = last.textContent.replace(/:\s*$/, "");
+  }
+
+  // The facts come as "2026-11-07 10:00:00" for the scheduled shift and
+  // "11/07/2026 19:25" for the punch; one card with the shift and how far
+  // from its end the punch was. Any other shape leaves the site's rows alone.
+  function overtimeSummary(facts) {
+    const iso = [];
+    const us = [];
+    for (const f of facts) {
+      const a = parseIsoStamp(f.value);
+      if (a !== null) iso.push(a);
+      else {
+        const b = parseUsStamp(f.value);
+        if (b !== null) us.push(b);
+      }
+    }
+    if (iso.length !== 2 || us.length !== 1) return null;
+    const [start, end] = iso.sort((x, y) => x - y);
+    const punch = us[0];
+    const sameDay = (a, b) => new Date(a).toDateString() === new Date(b).toDateString();
+    const card = el("div", "tsm-ot-summary");
+    card.append(summaryRow("Shift", `${fmtDayShort(start)} · ${fmtTime(start)} – ${sameDay(start, end) ? "" : fmtDayShort(end) + " "}${fmtTime(end)}`));
+    const diff = punch - end;
+    const note = Math.abs(diff) < 30000
+      ? "right at the end of the shift"
+      : `${fmtLead(Math.abs(diff))} ${diff > 0 ? "after" : "before"} the shift ended`;
+    card.append(summaryRow("Punched out", `${sameDay(punch, end) ? "" : fmtDayShort(punch) + " · "}${fmtTime(punch)}`, note));
+    return card;
+  }
+
+  function summaryRow(label, value, note) {
+    const row = el("div", "tsm-ot-sum-row");
+    row.append(el("div", "tsm-ot-sum-label", label), el("div", "tsm-ot-sum-value", value));
+    if (note) row.append(el("div", "tsm-ot-sum-note", note));
+    return row;
+  }
+
+  // "2026-11-07 10:00:00" -> ms, else null
+  function parseIsoStamp(text) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(text || "");
+    return m ? new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime() : null;
+  }
+
+  // "11/07/2026 19:25" or "11/06/2026 6:53 PM" -> ms, else null
+  function parseUsStamp(text) {
+    const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(?:([ap])\.?m?\.?)?$/i.exec(text || "");
+    if (!m) return null;
+    let h = +m[4];
+    if (m[7]) h = (h % 12) + (m[7].toLowerCase() === "p" ? 12 : 0);
+    return new Date(+m[3], +m[1] - 1, +m[2], h, +m[5], +(m[6] || 0)).getTime();
+  }
+
+  // "Sat Nov 7"
+  function fmtDayShort(ms) {
+    const d = new Date(ms);
+    return `${WEEKDAYS[d.getDay()].slice(0, 3)} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
   }
 
   // ---- punch clock page ----------------------------------------------------
