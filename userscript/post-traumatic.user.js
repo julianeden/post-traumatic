@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Post-Traumatic
 // @namespace    https://github.com/julianeden/post-traumatic
-// @version      1.5.8
+// @version      1.5.10
 // @description  Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.
 // @author       Julian Eden
 // @match        *://*.traumasoft.com/*
@@ -656,7 +656,8 @@ html[data-tsm="on"] .calendar-legend-color {
   border-radius: 3px;
 }
 
-html[data-tsm-base] .tsm-unit:not(.tsm-base-match) {
+html[data-tsm-base] .tsm-unit:not(.tsm-base-match),
+html[data-tsm-base] table.tsm-shift:not(.tsm-base-match) {
   display: none !important;
 }
 
@@ -2876,6 +2877,7 @@ html[data-tsm="on"] .tsm-confirm-yes {
     } else {
       html.dataset.tsmMode = "agenda";
       addTodayButton(month);
+      buildAgendaBaseFilter(days);
       loadCrew(days).catch((e) => diag.log(`crew: ${e && e.message ? e.message : e}`));
     }
     diag.log(`active · mode ${html.dataset.tsmMode} · ${days.length} days`);
@@ -4214,6 +4216,63 @@ html[data-tsm="on"] .tsm-confirm-yes {
     document.body.append(btn);
   }
 
+  // ---- agenda view: base filter ------------------------------------------
+
+  // The same Base dropdown as the unit views, beside the month picker,
+  // keyed off each shift's unit name; a base leaves only your shifts there
+  // and days left without one fold up like free days.
+  function buildAgendaBaseFilter(days) {
+    const right = document.querySelector(".tsm-nav-right");
+    if (!right) return;
+    const counts = new Map();
+    const shifts = [];
+    for (const td of days) {
+      td.dataset.tsmBlank = td.classList.contains("tsm-empty") ? "1" : "";
+      for (const table of td.querySelectorAll("table.tsm-shift")) {
+        const base = baseOfUnit(tidy(table.querySelector("tr.tsm-shift-main td")?.textContent || ""));
+        table.dataset.tsmBase = base.toLowerCase();
+        if (base) counts.set(base, (counts.get(base) || 0) + 1);
+        shifts.push(table);
+      }
+    }
+    if (shifts.length === 0) return;
+    const names = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n);
+    const select = document.createElement("select");
+    select.className = "tsm-baseselect";
+    select.setAttribute("aria-label", "Show only your shifts at this base");
+    select.append(new Option("All bases", ""));
+    for (const n of names) select.append(new Option(n, n.toLowerCase()));
+    const setBase = (key) => {
+      if (key) html.dataset.tsmBase = key;
+      else delete html.dataset.tsmBase;
+      select.value = key;
+      for (const table of shifts) table.classList.toggle("tsm-base-match", !key || table.dataset.tsmBase === key);
+      for (const td of days) {
+        td.classList.toggle("tsm-empty", td.dataset.tsmBlank === "1" || !td.querySelector(key ? "table.tsm-shift.tsm-base-match" : "table.tsm-shift"));
+      }
+      try {
+        localStorage.setItem("tsm.base", key);
+      } catch {
+        // storage may be unavailable; the filter still applies for this page
+      }
+    };
+    select.addEventListener("change", () => setBase(select.value));
+    right.prepend(select);
+    let saved = "";
+    try {
+      saved = localStorage.getItem("tsm.base") || "";
+    } catch {
+      // no storage; start on all bases
+    }
+    setBase(names.some((n) => n.toLowerCase() === saved) ? saved : "");
+  }
+
+  // "Alpha 3W (A-58)" is at Alpha and "MWT-W1" at MWT: the first word of
+  // the name, before any space or hyphen.
+  function baseOfUnit(text) {
+    return (text.replace(/\s*\(.*\)$/, "").split(/[\s-]/)[0] || "").trim();
+  }
+
   // ---- agenda view: crew on each of your shifts --------------------------
 
   // Adds a crew line to every shift card, then fills it in from the unit
@@ -4524,7 +4583,7 @@ html[data-tsm="on"] .tsm-confirm-yes {
     const baseCounts = new Map();
     for (const td of days) {
       for (const unit of td.querySelectorAll(".tsm-unit")) {
-        const base = unitHeading(unit).replace(/\s*\(.*\)$/, "").split(/[\s-]/)[0] || "";
+        const base = baseOfUnit(unitHeading(unit));
         unit.dataset.tsmBase = base.toLowerCase();
         if (base) baseCounts.set(base, (baseCounts.get(base) || 0) + 1);
       }

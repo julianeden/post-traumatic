@@ -11,7 +11,7 @@
   "version": {
     "license": "MIT",
     "release_notes": {
-      "en-US": "Unit views: a Base dropdown beside the month picker shows one base's units; the year picker and the time-off colour key wait behind small links; the day strip is a week of chips edge to edge with no arrows; the All / Open only / Mine buttons are gone; the Calendar button appears once a name is typed and the status line only during a search; past days are no longer faded; during a search the chips show only that person's count; Management joins the common views. Shifts through midnight: a partner listed by the site under the next day is shown on the unit card and on your own shifts, with the hours alone marked."
+      "en-US": "Your month gets the same Base dropdown as the unit views, beside the month picker: pick a base to keep only your shifts there, with the choice shared across views."
     }
   }
 }
