@@ -58,12 +58,13 @@ It serves each page in headless Chromium at a made-up origin under the
 site's real paths, with the saved asset folders answered from disk and every
 other request blocked, injects the add-on's CSS and script, and checks that
 the page no longer overflows, that the individual view's crew lines come from a correctly
-formed request for the BLS view (answered with the saved BLS page) and its
-spares list matches an independent reading of that page, that the pickup handlers are untouched, that the location
+formed request for the BLS view (answered with the saved BLS page for the
+same month) and that each card's partners, open seats and hours without a
+partner, and its spares list, match an independent reading of that page, that the pickup handlers are untouched, that the location
 view shows exactly one day with a chip per day, that the "Open only" and
 person filters hide the right units, that the person calendar's dots agree
 with the day chips and its shift card matches the day's own unit list, that
-the confirmation dialog fits the viewport, and that the punch clock page
+the confirmation dialog fits the viewport, that a unit view (run once as itself and once standing in for the Dispatch view) carries seats across midnight and marks the hours alone, and that the punch clock page
 shows one button, does not scroll, asks before early punches (the fixture's
 server clock is moved and a punched-in state synthesised for the variants)
 and hands non-early punches to the site's handler, that the top bar has its
@@ -101,6 +102,7 @@ choosing update, or re-opening the raw URL, picks up a newer version.
 The test harness runs the bundle the same way it runs the add-on
 (`npm run test:userscript`), and in Safari's engine with
 `TSM_BROWSER=webkit` after `npx playwright-core install webkit`.
+`TSM_ONLY=name.html` runs one fixture; the others still answer as unit views.
 
 ## Distribution
 

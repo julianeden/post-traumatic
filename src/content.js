@@ -24,6 +24,7 @@
   // Unit views searched, in order, for the crew on each of your shifts.
   const CREW_VIEWS = ["bls", "als", "details"];
   const CREW_CACHE_MS = 10 * 60 * 1000;
+  const DAY_MIN = 24 * 60;
   const LOGIN_KEY = "tsm.login.username";
   const PUNCH_URL = "/main.php?a=user:punchin";
   const SCHEDULE_URL = "/main.php?a=user:schedule";
@@ -150,6 +151,7 @@
 
     if (isLocation) {
       html.dataset.tsmMode = "location";
+      if (!isDispatchView()) carryOvernight(days);
       const pager = buildPager(month, days);
       // The header that carries the signed-in name is rendered by the site's
       // own script and may land after DOMContentLoaded.
@@ -1259,11 +1261,13 @@
     const units = content.querySelectorAll(":scope > tbody > tr");
     for (const unit of units) {
       unit.classList.add("tsm-unit");
-      // The heading loses a repeated name ("Alpha 1 (Alpha 1)" is "Alpha 1")
-      // and, on the Dispatch view, its "Communications-" prefix
-      // ("Communications-Night" is "Night"); the full text stays on the element.
-      const heading = unit.querySelector("div.location");
-      if (heading && !heading.dataset.tsmFull && heading.childNodes.length === 1 && heading.firstChild.nodeType === Node.TEXT_NODE) {
+      // Each heading (a unit row can carry a second one, "MED A-24 (MED
+      // A-24)" under "A24 (MED A-24)") loses a repeated name ("Alpha 1
+      // (Alpha 1)" is "Alpha 1") and, on the Dispatch view, its
+      // "Communications-" prefix ("Communications-Night" is "Night"); the
+      // full text stays on the element.
+      for (const heading of unit.querySelectorAll("div.location")) {
+        if (heading.dataset.tsmFull || heading.childNodes.length !== 1 || heading.firstChild.nodeType !== Node.TEXT_NODE) continue;
         const full = tidy(heading.textContent);
         let label = full;
         const m = /^(.*?)\s*\((.*)\)$/.exec(full);
@@ -1345,8 +1349,66 @@
           count += 1;
         }
       }
+      for (const row of td.querySelectorAll(".tsm-carry")) {
+        if (nameKey(row.dataset.name || "") === me) row.classList.add("tsm-carry-mine");
+      }
       td.dataset.mine = String(count);
       return count;
+    });
+  }
+
+  // ---- location view: seats that run through midnight -------------------
+
+  // The site files a seat under the day it starts, so the partner who joins
+  // an overnight seat at midnight is listed under the next day. Each unit
+  // gets the neighbouring days' seats that overlap its own, tagged with the
+  // day they are listed under, and a seat that is accompanied for only part
+  // of its hours gets a line for the hours with no one beside it.
+  function carryOvernight(days) {
+    const seatsOf = (unit, shift) => [...unit.querySelectorAll("table.shifts > tbody > tr")]
+      .map((tr) => {
+        const time = timeOf(tr);
+        const r = parseRange(time);
+        return { tr, time, range: r && { start: r.start + shift, end: r.end + shift } };
+      })
+      .filter((s) => s.range);
+    days.forEach((td, i) => {
+      for (const unit of td.querySelectorAll(".tsm-unit")) {
+        const own = seatsOf(unit, 0);
+        if (own.length === 0) continue;
+        const heading = unitHeading(unit);
+        const carried = [];
+        for (const [d, shift] of [[i - 1, -DAY_MIN], [i + 1, DAY_MIN]]) {
+          if (!days[d]) continue;
+          for (const other of days[d].querySelectorAll(".tsm-unit")) {
+            if (unitHeading(other) !== heading) continue;
+            for (const s of seatsOf(other, shift)) {
+              if (own.some((o) => overlap(o.range, s.range) > 0)) carried.push({ ...s, td: days[d] });
+            }
+          }
+        }
+        for (const s of own) {
+          const covers = [...own.filter((o) => o !== s), ...carried].map((o) => o.range).filter((r) => overlap(r, s.range) > 0);
+          if (covers.length === 0) continue;
+          let after = s.tr.closest("table.shifts");
+          for (const g of uncovered(s.range, covers)) {
+            const line = el("div", "tsm-gap");
+            line.append(el("span", "tsm-gap-label", "no partner"), el("span", "tsm-gap-time", rangeText(g, s.time)));
+            after.after(line);
+            after = line;
+          }
+        }
+        const cell = unit.querySelector(":scope > td") || unit;
+        for (const s of carried) {
+          const name = tidy(s.tr.querySelector("td")?.textContent || "");
+          const row = el("div", "tsm-carry");
+          row.dataset.name = name;
+          const who = el("span", "tsm-carry-name", name);
+          who.append(el("span", "tsm-carry-day", `${WEEKDAYS[s.td.cellIndex].slice(0, 3)} ${s.td.id.slice(4)}`));
+          row.append(who, el("span", "tsm-carry-time", s.time));
+          cell.append(row);
+        }
+      }
     });
   }
 
@@ -1420,7 +1482,10 @@
         const view = await fetchUnitView(label);
         if (!view) continue;
         views.push(view);
-        for (const s of unmatched()) s.unit_match = findUnit(view, s, me);
+        for (const s of unmatched()) {
+          s.unit_match = findUnit(view, s, me);
+          if (s.unit_match) s.view = view;
+        }
         diag.log(`crew: ${label} view loaded, ${unmatched().length} shifts still unmatched`);
       } catch (e) {
         failed += 1;
@@ -1434,13 +1499,19 @@
         s.cell.append(el("span", "tsm-crew-note", views.length === 0 && failed ? "Couldn't load the unit views." : "Crew not shown in the unit views."));
         continue;
       }
-      const crew = crewOf(s.unit_match, s.range, me);
+      const crew = crewOf(s.view, s.day, s.unit_match, s.range, me);
       const partners = crew.filter((c) => !c.open);
       const open = crew.filter((c) => c.open);
-      for (const c of partners) s.cell.append(crewLine("with", c, s.range));
-      for (const c of open) s.cell.append(crewLine("open seat", c, s.range));
+      const gaps = crew.length ? uncovered(s.range, crew.map((c) => c.range)) : [];
+      const lines = [
+        ...partners.map((c) => ({ start: c.range.start, node: crewLine("with", c, s.range) })),
+        ...open.map((c) => ({ start: c.range.start, node: crewLine("open seat", c, s.range) })),
+        ...gaps.map((g) => ({ start: g.start, node: gapLine(g, crew[0].time) })),
+      ];
+      lines.sort((a, b) => a.start - b.start);
+      for (const l of lines) s.cell.append(l.node);
       if (crew.length === 0) s.cell.append(el("span", "tsm-crew-note", "No one else on this unit."));
-      if (!s.past && (open.length > 0 || partners.length === 0)) {
+      if (!s.past && (open.length > 0 || partners.length === 0 || gaps.length > 0)) {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "tsm-spares-btn";
@@ -1456,6 +1527,13 @@
     const line = el("div", c.open ? "tsm-crew tsm-crew-open" : "tsm-crew");
     line.append(el("span", "tsm-crew-label", label), el("span", "tsm-crew-name", c.name));
     if (c.range && (c.range.start !== range.start || c.range.end !== range.end)) line.append(el("span", "tsm-crew-time", c.time));
+    return line;
+  }
+
+  // A stretch of the shift with no seat beside yours, not even an open one.
+  function gapLine(gap, like) {
+    const line = el("div", "tsm-crew tsm-crew-gap");
+    line.append(el("span", "tsm-crew-label", "no partner"), el("span", "tsm-crew-time", rangeText(gap, like)));
     return line;
   }
 
@@ -1561,36 +1639,63 @@
       || null;
   }
 
-  function crewOf(unit, range, me) {
+  function crewOf(view, day, unit, range, me) {
     const out = [];
-    for (const x of unit.slots) {
-      const r = parseRange(x.time);
-      if (overlap(r, range) <= 0) continue;
+    for (const x of unitSeats(view, day, unit)) {
+      if (overlap(x.range, range) <= 0) continue;
       if (!x.open && me && nameKey(x.who) === me) continue;
-      out.push({ name: x.who, time: x.time, range: r, open: x.open, requestable: x.requestable });
+      out.push({ name: x.who, time: x.time, range: x.range, open: x.open, requestable: x.requestable });
     }
     return out;
   }
 
-  // Everyone else on that day whose hours overlap these and who has no other
-  // employee on their unit for their own hours.
+  // A unit's seats on one day together with its seats on the days either
+  // side, timed on this day's clock (yesterday's 10:00pm is -2:00, tomorrow's
+  // 12:00am is 24:00), so the pieces of an overnight shift line up. The site
+  // files a seat under the day it starts, so a partner who joins after
+  // midnight is listed on the next day.
+  function unitSeats(view, day, unit) {
+    const out = [];
+    for (const [d, shift] of [[day - 1, -DAY_MIN], [day, 0], [day + 1, DAY_MIN]]) {
+      for (const u of view.days[d] || []) {
+        if (!sameUnit(u, unit)) continue;
+        for (const x of u.slots) {
+          const r = parseRange(x.time);
+          out.push({ ...x, range: r && { start: r.start + shift, end: r.end + shift } });
+        }
+      }
+    }
+    return out;
+  }
+
+  function sameUnit(a, b) {
+    return a.name.toLowerCase() === b.name.toLowerCase() && a.label.toLowerCase() === b.label.toLowerCase();
+  }
+
+  // Everyone else whose hours overlap these, on this day or on a neighbouring
+  // day's overnight piece, who has no other employee on their unit for their
+  // own hours.
   function sparesFor(views, day, range, me) {
     const seen = new Set();
     const out = [];
     for (const view of views) {
-      for (const unit of view.days[day] || []) {
-        for (const x of unit.slots) {
+      const units = [];
+      for (const d of [day - 1, day, day + 1]) {
+        for (const u of view.days[d] || []) if (!units.some((v) => sameUnit(v, u))) units.push(u);
+      }
+      for (const unit of units) {
+        const seats = unitSeats(view, day, unit);
+        for (const x of seats) {
           if (x.open || (me && nameKey(x.who) === me)) continue;
-          const r = parseRange(x.time);
-          const together = overlap(r, range);
+          const together = overlap(x.range, range);
           if (together <= 0) continue;
-          const partnered = unit.slots.some((y) => y !== x && !y.open && overlap(parseRange(y.time), r) > 0);
+          const partnered = seats.some((y) => y !== x && !y.open && overlap(y.range, x.range) > 0);
           if (partnered) continue;
-          const key = `${unit.name}|${x.who}|${x.time}`;
+          const key = `${unit.name}|${unit.label}|${x.who}|${x.range.start}|${x.range.end}`;
           if (seen.has(key)) continue;
           seen.add(key);
           const unitText = unit.label && unit.label.toLowerCase() !== unit.name.toLowerCase() ? `${unit.name} (${unit.label})` : unit.name;
-          out.push({ name: x.who, unit: unitText, time: x.time, range: r, overlap: together });
+          out.push({ name: x.who, unit: unitText, time: x.time, range: x.range, overlap: together });
         }
       }
     }
@@ -1607,7 +1712,9 @@
 
   function buildPager(month, days) {
     const pager = el("div", "tsm-pager");
-    const title = el("div", "tsm-pager-title", (month.querySelector("td.monthname")?.textContent || "").trim());
+    // The toolbar's month picker already names the month; the title repeats
+    // it only on pages without one.
+    const title = document.getElementById("StartMonth") ? null : el("div", "tsm-pager-title", (month.querySelector("td.monthname")?.textContent || "").trim());
 
     const nav = el("div", "tsm-nav");
     const prev = navButton("‹", "Previous day");
@@ -1642,7 +1749,7 @@
 
     const status = el("div", "tsm-status");
 
-    pager.append(title, nav, filters, search, status);
+    pager.append(...(title ? [title] : []), nav, filters, search, status);
     month.parentNode.insertBefore(pager, month);
 
     // Month grid for the person being searched for, shown in place of the
@@ -1689,11 +1796,11 @@
     });
 
     // Crew slots per day, tokenised once for the person filter.
-    const slotsByDay = days.map((td) =>
+    const slotsByDay = days.map((td, i) =>
       [...td.querySelectorAll("tr.employee")].map((tr) => {
         const name = tidy(tr.querySelector("td")?.textContent || "");
         const time = timeOf(tr);
-        return { tr, unit: tr.closest(".tsm-unit"), name, time, range: parseRange(time), tokens: nameTokens(name) };
+        return { tr, day: i, unit: tr.closest(".tsm-unit"), name, time, range: parseRange(time), tokens: nameTokens(name) };
       }),
     );
     const matchesByDay = days.map(() => 0);
@@ -1900,7 +2007,18 @@
       row.append(line);
       const crew = crewFor(slot);
       if (crew.length === 0) row.append(el("div", "tsm-pop-with tsm-pop-solo", "No one else on this unit"));
-      for (const c of crew) {
+      const items = crew.map((c) => ({ start: c.range ? c.range.start : slot.range?.start ?? 0, c }));
+      if (crew.length && slot.range) {
+        for (const g of uncovered(slot.range, crew.map((c) => c.range))) items.push({ start: g.start, gap: g });
+      }
+      items.sort((a, b) => a.start - b.start);
+      for (const { c, gap } of items) {
+        if (gap) {
+          const w = el("div", "tsm-pop-with tsm-pop-gap");
+          w.append(el("span", "tsm-pop-with-label", "no partner"), el("span", "tsm-pop-with-time", rangeText(gap, slot.time)));
+          row.append(w);
+          continue;
+        }
         const w = el("div", c.open ? "tsm-pop-with tsm-pop-open" : "tsm-pop-with");
         w.append(el("span", "tsm-pop-with-label", c.open ? "open seat" : "with"), el("span", "tsm-pop-with-name", c.name));
         if (c.time !== slot.time) w.append(el("span", "tsm-pop-with-time", c.time));
@@ -1910,24 +2028,37 @@
       return row;
     }
 
-    // The other seats on the same unit whose hours overlap this slot's.
+    // The other seats on the same unit whose hours overlap this slot's,
+    // including the unit's seats on the days either side that run through
+    // midnight into or out of this one.
     function crewFor(slot) {
       const out = [];
-      for (const tr of slot.unit.querySelectorAll("table.shifts > tbody > tr")) {
-        if (tr === slot.tr) continue;
-        const time = timeOf(tr);
-        const range = parseRange(time);
-        const together = slot.range && range
-          ? Math.min(slot.range.end, range.end) > Math.max(slot.range.start, range.start)
-          : time === slot.time;
-        if (!together) continue;
-        if (tr.classList.contains("employee")) {
-          const name = tidy(tr.querySelector("td")?.textContent || "");
-          if (nameKey(name) === nameKey(slot.name)) continue;
-          out.push({ name, time, open: false });
-        } else {
-          const label = tidy(tr.querySelector("span.hightlight")?.textContent || "").replace(/\s*open$/i, "");
-          out.push({ name: label || "Open", time, open: true, requestable: tr.classList.contains("unassigned") });
+      const heading = unitHeading(slot.unit);
+      const sources = [[slot.unit, 0]];
+      for (const [d, shift] of [[slot.day - 1, -DAY_MIN], [slot.day + 1, DAY_MIN]]) {
+        if (!slot.range || !days[d]) continue;
+        for (const unit of days[d].querySelectorAll(".tsm-unit")) {
+          if (unitHeading(unit) === heading) sources.push([unit, shift]);
+        }
+      }
+      for (const [unit, shift] of sources) {
+        for (const tr of unit.querySelectorAll("table.shifts > tbody > tr")) {
+          if (tr === slot.tr) continue;
+          const time = timeOf(tr);
+          const parsed = parseRange(time);
+          const range = parsed && { start: parsed.start + shift, end: parsed.end + shift };
+          const together = slot.range && range
+            ? Math.min(slot.range.end, range.end) > Math.max(slot.range.start, range.start)
+            : shift === 0 && time === slot.time;
+          if (!together) continue;
+          if (tr.classList.contains("employee")) {
+            const name = tidy(tr.querySelector("td")?.textContent || "");
+            if (nameKey(name) === nameKey(slot.name)) continue;
+            out.push({ name, time, range, open: false });
+          } else {
+            const label = tidy(tr.querySelector("span.hightlight")?.textContent || "").replace(/\s*open$/i, "");
+            out.push({ name: label || "Open", time, range, open: true, requestable: tr.classList.contains("unassigned") });
+          }
         }
       }
       return out;
@@ -2037,6 +2168,40 @@
     let end = minutes(m[4], m[5], m[6]);
     if (end <= start) end += 24 * 60;
     return { start, end };
+  }
+
+  // Parts of range that none of the covers reach, in time order.
+  function uncovered(range, covers) {
+    const out = [];
+    let at = range.start;
+    for (const c of covers.filter(Boolean).sort((a, b) => a.start - b.start)) {
+      if (at >= range.end) break;
+      if (c.start > at) out.push({ start: at, end: Math.min(c.start, range.end) });
+      at = Math.max(at, c.end);
+    }
+    if (at < range.end) out.push({ start: at, end: range.end });
+    return out;
+  }
+
+  // Minutes from midnight -> "10:00pm" or "22:00"; values outside the day wrap.
+  function fmtMinutes(min, twelveHour) {
+    const m = ((min % DAY_MIN) + DAY_MIN) % DAY_MIN;
+    const h = Math.floor(m / 60);
+    if (!twelveHour) return `${pad2(h)}:${pad2(m % 60)}`;
+    return `${h % 12 || 12}:${pad2(m % 60)}${h < 12 ? "am" : "pm"}`;
+  }
+
+  // A range written the way the time beside it is: "10:00pm-12:00am" next
+  // to "12:00am-3:00am", "22:00-00:00" next to "00:00-03:00".
+  function rangeText(range, like) {
+    const twelve = /[ap]\.?m/i.test(like || "");
+    return `${fmtMinutes(range.start, twelve)}-${fmtMinutes(range.end, twelve)}`;
+  }
+
+  // The unit's full heading, "Alpha 1 (Alpha 1)", as the site wrote it.
+  function unitHeading(unit) {
+    const h = unit.querySelector("div.location");
+    return h ? h.dataset.tsmFull || tidy(h.textContent) : "";
   }
 
   // "Alpha 2 (Alpha 2)" -> "Alpha 2"; "A24 (MED A-24)" is kept whole.

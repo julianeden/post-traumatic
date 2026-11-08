@@ -6,7 +6,7 @@
 // (default: test/fixtures). The pages are served at a made-up https origin
 // under the site's real paths, their saved asset folders are answered from
 // disk, and every other request is blocked, so nothing reaches the real site.
-import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium, webkit } from "playwright-core";
@@ -37,6 +37,93 @@ if (!existsSync(fixtures)) {
   process.exit(0);
 }
 const pages = readdirSync(fixtures).filter((f) => f.toLowerCase().endsWith(".html"));
+
+// The selected value of a <select> in a saved page, by element id.
+function selectedValue(html, id) {
+  const block = new RegExp(`id="${id}"[\\s\\S]*?</select>`).exec(html);
+  const opt = block && /<option value="([^"]*)"[^>]*\bselected\b/.exec(block[0]);
+  return opt ? opt[1] : "";
+}
+const monthKey = (html) => `${selectedValue(html, "StartYear")}-${selectedValue(html, "StartMonth")}`;
+
+// The saved BLS unit view showing the same month as the page, the newest when
+// there are several; one saved with the add-on active is not used.
+function blsFixtureFor(file) {
+  const want = monthKey(readFileSync(join(fixtures, file), "utf8"));
+  const candidates = pages
+    .filter((f) => f !== file)
+    .map((f) => ({ f, html: readFileSync(join(fixtures, f), "utf8"), mtime: statSync(join(fixtures, f)).mtimeMs }))
+    .filter((c) => /template_id=59"\s+selected/.test(c.html) && !/data-tsm-ready=/.test(c.html.slice(0, 2000)))
+    .sort((a, b) => b.mtime - a.mtime);
+  return (candidates.find((c) => monthKey(c.html) === want) || candidates[0])?.f || null;
+}
+
+// Every unit and seat per day of a saved unit view, read in a page of its own.
+async function parseUnitFixture(context, path) {
+  const p2 = await context.newPage();
+  await p2.goto("file://" + path, { waitUntil: "load", timeout: 60_000 });
+  const data = await p2.evaluate(() => {
+    const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    const out = {};
+    for (const td of document.querySelectorAll('table.month td[id^="day_"]')) {
+      out[Number(td.id.slice(4))] = [...td.querySelectorAll("table.eventcontent > tbody > tr")].map((tr) => ({
+        unit: tidy(tr.querySelector("div.location")?.textContent || ""),
+        slots: [...tr.querySelectorAll("table.shifts > tbody > tr")].map((r) => ({ employee: r.classList.contains("employee"), who: tidy(r.querySelector("td")?.textContent || ""), time: tidy(r.querySelector("td.timerange")?.textContent || "") })),
+      }));
+    }
+    return out;
+  });
+  await p2.close();
+  return data;
+}
+
+// Minutes from midnight for "7:00pm" or "19:00", a [start, end] pair for a
+// range (an end at or before the start is the next day), and their overlap.
+const mins = (t) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?/i.exec(t); let h = Number(m[1]); if (m[3]) h = (h % 12) + (m[3].toLowerCase() === "p" ? 12 : 0); return h * 60 + Number(m[2]); };
+const rng = (t) => { const [a, b] = t.split("-"); const s = mins(a); let e = mins(b); if (e <= s) e += 1440; return [s, e]; };
+const ov = (a, b) => Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+const halves = (t) => { const m = /^(.*?)\s*\((.*)\)$/.exec(t); return (m ? [m[1], m[2]] : [t, ""]).map((s) => s.toLowerCase()); };
+
+// A unit's seats on a day plus the same unit's seats on the days either side,
+// timed on that day's clock, as the add-on reads them.
+function seatsAround(data, day, unitText) {
+  const want = halves(unitText).join("|");
+  const out = [];
+  for (const [d, shift] of [[day - 1, -1440], [day, 0], [day + 1, 1440]]) {
+    for (const u of data[d] || []) {
+      if (halves(u.unit).join("|") !== want) continue;
+      for (const s of u.slots) {
+        const [a, b] = rng(s.time);
+        out.push({ ...s, start: a + shift, end: b + shift });
+      }
+    }
+  }
+  return out;
+}
+
+// The unit view's heading for a shift card: a unit on that day named by
+// either half of the card's unit text with a seat in those hours, or else
+// any unit listing the signed-in user then.
+function unitFor(data, day, unitText, range) {
+  const wanted = new Set(halves(unitText).filter(Boolean));
+  const units = data[day] || [];
+  const hit = units.find((u) => halves(u.unit).some((h) => wanted.has(h)) && u.slots.some((s) => ov(rng(s.time), range) > 0))
+    || units.find((u) => u.slots.some((s) => s.employee && /eden/i.test(s.who) && ov(rng(s.time), range) > 0));
+  return hit ? hit.unit : null;
+}
+
+// Parts of range no seat reaches, as "start|length" on the day's clock.
+function gapsIn(range, seats) {
+  const out = [];
+  let at = range[0];
+  for (const s of seats.slice().sort((a, b) => a.start - b.start)) {
+    if (at >= range[1]) break;
+    if (s.start > at) out.push([at, Math.min(s.start, range[1])]);
+    at = Math.max(at, s.end);
+  }
+  if (at < range[1]) out.push([at, range[1]]);
+  return out.map(([a, b]) => `${((a % 1440) + 1440) % 1440}|${b - a}`);
+}
 if (pages.length === 0) {
   console.log(`no .html fixtures in ${fixtures}; skipping`);
   process.exit(0);
@@ -467,15 +554,25 @@ if (existsSync(loginFixture)) {
   await context.close();
 }
 
-for (const file of pages) {
-  const name = file.replace(/\.html?$/i, "");
-  console.log(`${file}`);
+// Every page runs as itself; a unit view runs a second time standing in for
+// the Dispatch view (named by its template id in the address), which has no
+// clean fixture of its own. TSM_ONLY=name.html runs a single fixture; the
+// others still serve as unit views.
+const jobs = [];
+for (const file of pages.filter((f) => !process.env.TSM_ONLY || f.toLowerCase() === process.env.TSM_ONLY.toLowerCase())) {
+  const html = readFileSync(join(fixtures, file), "utf8");
   // A page saved while the add-on was running already carries its markup
   // and state, so the script would find nothing to do; it is not a fixture.
-  if (/data-tsm-ready=/.test(readFileSync(join(fixtures, file), "utf8").slice(0, 2000))) {
-    console.log("  (saved with the add-on active; skipped. Re-save it with the add-on disabled to test it)");
+  if (/data-tsm-ready=/.test(html.slice(0, 2000))) {
+    console.log(`${file}\n  (saved with the add-on active; skipped. Re-save it with the add-on disabled to test it)`);
     continue;
   }
+  jobs.push({ file, asDispatch: false });
+  if (/<table class="month"[\s\S]*class="location/.test(html)) jobs.push({ file, asDispatch: true });
+}
+for (const { file, asDispatch } of jobs) {
+  const name = file.replace(/\.html?$/i, "") + (asDispatch ? "-as-dispatch" : "");
+  console.log(`${file}${asDispatch ? " (as the Dispatch view)" : ""}`);
   const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   const blocked = new Set();
   await serveFixtures(context, blocked);
@@ -504,7 +601,7 @@ for (const file of pages) {
   });
   // The Dispatch view is told apart by the template id its dropdown option
   // carries; naming it in the address makes a saved unit view count as Dispatch.
-  const dispatchId = /template_id=(\d+)[^>]*>[^<]*Dispatch/.exec(readFileSync(join(fixtures, file), "utf8"))?.[1];
+  const dispatchId = asDispatch ? /template_id=(\d+)[^>]*>[^<]*Dispatch/.exec(readFileSync(join(fixtures, file), "utf8"))?.[1] : null;
   await page.goto(`${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}${dispatchId ? `&template_id=${dispatchId}` : ""}`, { waitUntil: "load", timeout: 60_000 });
 
   const before = await page.evaluate(() => ({
@@ -516,8 +613,8 @@ for (const file of pages) {
   await page.screenshot({ path: join(outDir, `${name}-before.png`) });
 
   // The individual view asks the site for the unit views; serve the saved
-  // BLS page for that request and fail the rest, recording what was asked.
-  const blsFixture = pages.find((f) => /schedule2/i.test(f)) || null;
+  // BLS page for the same month and fail the rest, recording what was asked.
+  const blsFixture = blsFixtureFor(file);
   const blsHtml = blsFixture ? readFileSync(join(fixtures, blsFixture), "utf8") : "";
   await page.evaluate((html) => {
     window.__tsmFetches = [];
@@ -540,10 +637,11 @@ for (const file of pages) {
     return true;
   });
 
-  // A unit view gets a "today" (its second day) and a clock reading 06:00, so
-  // the on-now marks can be checked against the saved shifts.
-  const onNowSetup = await page.evaluate(() => {
-    if (!document.querySelector("table.month div.location")) return null;
+  // Standing in for Dispatch, a unit view gets a "today" (its second day) and
+  // a clock reading 06:00, so the on-now marks can be checked against the
+  // saved shifts.
+  const onNowSetup = await page.evaluate((asDispatch) => {
+    if (!asDispatch || !document.querySelector("table.month div.location")) return null;
     const days = [...document.querySelectorAll('table.month td[id^="day_"]')];
     if (days.length < 2) return null;
     for (const td of days) td.classList.remove("today");
@@ -558,7 +656,7 @@ for (const file of pages) {
     const range = (text) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?m?\s*[-–]\s*(\d{1,2}):(\d{2})\s*([ap])?m?/i.exec(text || ""); if (!m) return null; const mins = (h, mi, ap) => ((ap ? (Number(h) % 12) + (ap.toLowerCase() === "p" ? 12 : 0) : Number(h)) * 60 + Number(mi)); const start = mins(m[1], m[2], m[3]); let end = mins(m[4], m[5], m[6]); if (end <= start) end += 1440; return { start, end }; };
     const rows = (td, at) => [...td.querySelectorAll("tr.employee")].filter((tr) => { const rg = range(tr.querySelector("td.timerange")?.textContent); return rg && rg.start <= at && at < rg.end; }).map((tr) => { tr.dataset.expectOnNow = "1"; return tr.querySelector("td.timerange").textContent.trim(); });
     return { today: rows(days[1], 360), yesterday: rows(days[0], 360 + 1440) };
-  });
+  }, asDispatch);
 
   await inject(page);
   await page.waitForTimeout(500);
@@ -856,10 +954,14 @@ for (const file of pages) {
         note: t.querySelector(".tsm-crew-note")?.textContent || "",
         with: [...t.querySelectorAll(".tsm-crew:not(.tsm-crew-open) .tsm-crew-name")].map((n) => n.textContent),
         open: [...t.querySelectorAll(".tsm-crew-open .tsm-crew-name")].map((n) => n.textContent),
+        gaps: [...t.querySelectorAll(".tsm-crew-gap .tsm-crew-time")].map((n) => n.textContent),
+        order: [...t.querySelectorAll(".tsm-crew")].map((n) => ({ label: n.querySelector(".tsm-crew-label")?.textContent, time: n.querySelector(".tsm-crew-time")?.textContent || "" })),
         spares: Boolean(t.querySelector(".tsm-spares-btn")),
       }));
       return { fetches: window.__tsmFetches, cards };
     });
+    const blsDays = await parseUnitFixture(context, join(fixtures, blsFixture));
+    console.log(`  crew: unit views answered with ${blsFixture}`);
     const first = crew.fetches[0];
     console.log(`  crew: ${crew.fetches.length} view request(s): ${crew.fetches.map((f) => `${f.method} ${f.url.replace(/^.*main\.php/, "main.php")}`).join(" ; ")}`);
     if (!first) fail("individual view did not request a unit view");
@@ -870,12 +972,34 @@ for (const file of pages) {
       if (first.credentials !== "same-origin") fail("unit-view request does not send the session cookie");
     }
     for (const c of crew.cards) {
-      console.log(`    day ${c.day} ${c.unit} ${c.time}: ${c.with.length ? "with " + c.with.join(", ") : ""}${c.open.length ? " open: " + c.open.join(", ") : ""}${c.note ? " [" + c.note + "]" : ""}${c.spares ? " [See spares]" : ""}`);
+      console.log(`    day ${c.day} ${c.unit} ${c.time}: ${c.with.length ? "with " + c.with.join(", ") : ""}${c.open.length ? " open: " + c.open.join(", ") : ""}${c.gaps.length ? " no partner: " + c.gaps.join(", ") : ""}${c.note ? " [" + c.note + "]" : ""}${c.spares ? " [See spares]" : ""}`);
       if (/checking/i.test(c.note)) fail(`day ${c.day}: crew line never resolved`);
       if (!c.past && c.open.length && !c.spares) fail(`day ${c.day}: open seat without a See spares button`);
+      if (!c.past && c.gaps.length && !c.spares) fail(`day ${c.day}: hours without a partner but no See spares button`);
       if (c.past && c.spares) fail(`day ${c.day}: past shift offers spares`);
-      if (c.with.length && !c.open.length && c.spares) fail(`day ${c.day}: has a partner but still offers spares`);
+      if (c.with.length && !c.open.length && !c.gaps.length && c.spares) fail(`day ${c.day}: has a partner but still offers spares`);
       if (c.with.some((w) => /eden/i.test(w))) fail(`day ${c.day}: lists the signed-in user as their own partner`);
+      // Independent reading of the BLS page: the seats beside this one on
+      // the unit, including those filed under the days either side.
+      const range = rng(c.time);
+      const unitText = unitFor(blsDays, c.day, c.unit, range);
+      if (!unitText) {
+        if (c.with.length || c.open.length || /no one else/i.test(c.note)) fail(`day ${c.day} ${c.unit}: card has crew but the BLS page has no such unit`);
+        continue;
+      }
+      const seats = seatsAround(blsDays, c.day, unitText).filter((s) => ov([s.start, s.end], range) > 0 && !(s.employee && /eden/i.test(s.who)));
+      const expect = {
+        with: seats.filter((s) => s.employee).map((s) => s.who).sort(),
+        open: seats.filter((s) => !s.employee).map((s) => s.who.replace(/\s*open$/i, "") || "Open").sort(),
+        gaps: seats.length ? gapsIn(range, seats).sort() : [],
+      };
+      const got = { with: c.with.slice().sort(), open: c.open.slice().sort(), gaps: c.gaps.map((g) => { const [a, b] = rng(g); return `${a % 1440}|${b - a}`; }).sort() };
+      if (JSON.stringify(got) !== JSON.stringify(expect)) fail(`day ${c.day} ${c.unit}: crew ${JSON.stringify(got)}, BLS page says ${JSON.stringify(expect)}`);
+      if (seats.length === 0 && !/no one else/i.test(c.note)) fail(`day ${c.day} ${c.unit}: unit has no other seat but the card does not say so`);
+      // Lines run in time order: a stretch alone before midnight comes before
+      // the partner who joins at midnight.
+      const starts = c.order.map((o) => { const a = rng(o.time || c.time)[0]; return a < range[0] ? a + 1440 : a; });
+      if (starts.some((a, i) => i > 0 && a < starts[i - 1])) fail(`day ${c.day} ${c.unit}: crew lines out of time order (${c.order.map((o) => `${o.label} ${o.time || ""}`).join("; ")})`);
     }
     const matched = crew.cards.filter((c) => c.with.length || c.open.length).length;
     if (matched === 0) fail("no shift card got crew information");
@@ -907,29 +1031,22 @@ for (const file of pages) {
           label: btn.textContent,
         };
       });
-      const expected = await (async () => {
-        const p2 = await context.newPage();
-        await p2.goto("file://" + join(fixtures, blsFixture), { waitUntil: "load", timeout: 60_000 });
-        const data = await p2.evaluate((day) => {
-          const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-          const td = document.getElementById(`day_${day}`);
-          return [...td.querySelectorAll("table.eventcontent > tbody > tr")].map((tr) => ({
-            unit: tidy(tr.querySelector("div.location")?.textContent || ""),
-            slots: [...tr.querySelectorAll("table.shifts > tbody > tr")].map((r) => ({ employee: r.classList.contains("employee"), who: tidy(r.querySelector("td")?.textContent || ""), time: tidy(r.querySelector("td.timerange")?.textContent || "") })),
-          }));
-        }, panel.day);
-        await p2.close();
-        const mins = (t) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?/i.exec(t); let h = Number(m[1]); if (m[3]) h = (h % 12) + (m[3].toLowerCase() === "p" ? 12 : 0); return h * 60 + Number(m[2]); };
-        const rng = (t) => { const [a, b] = t.split("-"); const s = mins(a); let e = mins(b); if (e <= s) e += 1440; return [s, e]; };
-        const ov = (a, b) => Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+      // Everyone on the BLS page working these hours, on this day or on a
+      // neighbouring day's overnight piece, with no other employee on their
+      // unit for their own hours.
+      const expected = (() => {
         const mine = rng(panel.time);
+        const unitTexts = new Set();
+        for (const d of [panel.day - 1, panel.day, panel.day + 1]) for (const u of blsDays[d] || []) unitTexts.add(u.unit);
         const out = [];
-        for (const u of data) for (const x of u.slots) {
-          if (!x.employee || /eden/i.test(x.who)) continue;
-          const r = rng(x.time);
-          if (ov(r, mine) <= 0) continue;
-          if (u.slots.some((y) => y !== x && y.employee && ov(rng(y.time), r) > 0)) continue;
-          out.push(`${x.who}|${x.time}`);
+        for (const unitText of unitTexts) {
+          const seats = seatsAround(blsDays, panel.day, unitText);
+          for (const x of seats) {
+            if (!x.employee || /eden/i.test(x.who)) continue;
+            if (ov([x.start, x.end], mine) <= 0) continue;
+            if (seats.some((y) => y !== x && y.employee && ov([y.start, y.end], [x.start, x.end]) > 0)) continue;
+            out.push(`${x.who}|${x.time}`);
+          }
         }
         return out;
       })();
@@ -1192,6 +1309,110 @@ for (const file of pages) {
         badges: document.querySelectorAll(".tsm-chip-has-match").length,
       }));
       if (cleared.active || cleared.badges) fail("clearing the person filter did not reset it");
+
+      // Shifts through midnight: a seat starting at 12:00am lists the partner
+      // the site filed under the day before, and that partner's card lists
+      // the seat that starts at midnight, with the hours before it marked as
+      // alone when nothing else is on the unit then.
+      const midnight = await page.evaluate(() => {
+        const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+        const mins = (t) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?/i.exec(t); let h = Number(m[1]); if (m[3]) h = (h % 12) + (m[3].toLowerCase() === "p" ? 12 : 0); return h * 60 + Number(m[2]); };
+        const rng = (t) => { const [a, b] = t.split("-"); const s = mins(a); let e = mins(b); if (e <= s) e += 1440; return [s, e]; };
+        const timeOf = (tr) => tidy(tr.querySelector("td.timerange")?.textContent || "");
+        const headingOf = (u) => { const h = u.querySelector("div.location"); return h.dataset.tsmFull || tidy(h.textContent); };
+        const query = (name) => { const w = name.split(/\s+/); return `${w[0].split("-")[0]} ${w[w.length - 1]}`; };
+        const days = [...document.querySelectorAll('table.month td[id^="day_"]')];
+        for (let i = 1; i < days.length; i++) {
+          for (const tr of days[i].querySelectorAll("tr.employee")) {
+            const time = timeOf(tr);
+            if (!/^12:00am-/i.test(time)) continue;
+            const unit = headingOf(tr.closest(".tsm-unit"));
+            const prev = [...days[i - 1].querySelectorAll(".tsm-unit")].find((u) => headingOf(u) === unit);
+            const mate = prev && [...prev.querySelectorAll("tr.employee")].find((o) => rng(timeOf(o))[1] > 1440);
+            if (!mate) continue;
+            const mateRange = rng(timeOf(mate));
+            const beforeMidnight = [mateRange[0], 1440];
+            const others = [...prev.querySelectorAll("table.shifts > tbody > tr")].filter((o) => o !== mate && Math.min(rng(timeOf(o))[1], beforeMidnight[1]) > Math.max(rng(timeOf(o))[0], beforeMidnight[0]));
+            const name = tidy(tr.querySelector("td").textContent);
+            const mateName = tidy(mate.querySelector("td").textContent);
+            return { dayIndex: i, day: Number(days[i].id.slice(4)), unit, time, name, query: query(name), mateName, mateQuery: query(mateName), mateTime: timeOf(mate), aloneBefore: others.length === 0 ? `${timeOf(mate).split("-")[0]}-12:00am` : null };
+          }
+        }
+        return null;
+      });
+      if (midnight) {
+        const cardFor = async (q, dayIndex, unit) => {
+          await page.locator(".tsm-search-input").fill(q);
+          await page.waitForTimeout(400);
+          await page.locator(".tsm-calbtn").click();
+          await page.waitForTimeout(200);
+          await page.locator(".tsm-cal-day").nth(dayIndex).click();
+          await page.waitForTimeout(400);
+          const card = await page.evaluate((u) => {
+            const shift = [...document.querySelectorAll(".tsm-pop .tsm-pop-shift")].find((s) => u.startsWith(s.querySelector(".tsm-pop-unit").textContent));
+            return shift ? [...shift.querySelectorAll(".tsm-pop-with")].map((w) => [...w.children].map((c) => c.textContent).join(" ") || w.textContent) : null;
+          }, unit);
+          return card;
+        };
+        const leave = async () => {
+          await page.locator(".tsm-pop-go").click();
+          await page.waitForTimeout(200);
+          await page.locator(".tsm-search-clear").click();
+          await page.waitForTimeout(300);
+        };
+        const first = await cardFor(midnight.query, midnight.dayIndex, midnight.unit);
+        if (!first) fail(`midnight card: no shift for ${midnight.unit} on day ${midnight.day}`);
+        else if (!first.some((w) => w.includes(midnight.mateName) && w.includes(midnight.mateTime))) fail(`day ${midnight.day} ${midnight.unit} ${midnight.time}: card does not list ${midnight.mateName} ${midnight.mateTime} from the day before (${first.join("; ")})`);
+        await page.screenshot({ path: join(outDir, `${name}-after-midnight-popup.png`) });
+        await leave();
+        const second = await cardFor(midnight.mateQuery, midnight.dayIndex - 1, midnight.unit);
+        if (!second) fail(`midnight card: no shift for ${midnight.unit} on day ${midnight.day - 1}`);
+        else {
+          if (!second.some((w) => w.includes(midnight.name) && w.includes(midnight.time))) fail(`day ${midnight.day - 1} ${midnight.unit} ${midnight.mateTime}: card does not list ${midnight.name} ${midnight.time} from the day after (${second.join("; ")})`);
+          if (midnight.aloneBefore && !second.some((w) => /^no partner/i.test(w) && w.includes(midnight.aloneBefore))) fail(`day ${midnight.day - 1} ${midnight.unit} ${midnight.mateTime}: card does not mark ${midnight.aloneBefore} as alone (${second.join("; ")})`);
+          if (!midnight.aloneBefore && second.some((w) => /^no partner/i.test(w))) fail(`day ${midnight.day - 1} ${midnight.unit}: card marks hours alone although another seat covers them (${second.join("; ")})`);
+        }
+        await page.screenshot({ path: join(outDir, `${name}-after-midnight-popup-2.png`) });
+        await leave();
+
+        // The day cards themselves (not on Dispatch, where positions are not
+        // partnered): the day before carries the seat that starts at
+        // midnight, the day after carries the overnight seat, and the hours
+        // alone are marked under the overnight seat.
+        if (!asDispatch) {
+        const cells = await page.evaluate((m) => {
+          const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+          const headingOf = (u) => { const h = u.querySelector("div.location"); return h.dataset.tsmFull || tidy(h.textContent); };
+          const days = [...document.querySelectorAll('table.month td[id^="day_"]')];
+          const unitOn = (i) => [...days[i].querySelectorAll(".tsm-unit")].find((u) => headingOf(u) === m.unit);
+          const read = (u) => ({
+            rows: [...u.querySelectorAll(".tsm-carry")].map((c) => `${c.querySelector(".tsm-carry-name").firstChild.textContent.trim()}|${c.querySelector(".tsm-carry-day").textContent}|${c.querySelector(".tsm-carry-time").textContent}`),
+            gaps: [...u.querySelectorAll(".tsm-gap .tsm-gap-time")].map((g) => g.textContent),
+          });
+          const before = unitOn(m.dayIndex - 1), after = unitOn(m.dayIndex);
+          before.dataset.tsmProbe = "before";
+          after.dataset.tsmProbe = "after";
+          return { before: read(before), after: read(after) };
+        }, midnight);
+        if (!cells.before.rows.some((r) => r.startsWith(`${midnight.name}|`) && r.endsWith(`|${midnight.time}`))) fail(`day ${midnight.day - 1} ${midnight.unit}: unit card lacks the carried row ${midnight.name} ${midnight.time} from day ${midnight.day} (${cells.before.rows.join("; ") || "none"})`);
+        if (midnight.aloneBefore && !cells.before.gaps.includes(midnight.aloneBefore)) fail(`day ${midnight.day - 1} ${midnight.unit}: unit card does not mark ${midnight.aloneBefore} as alone (${cells.before.gaps.join("; ") || "none"})`);
+        if (!midnight.aloneBefore && cells.before.gaps.length) fail(`day ${midnight.day - 1} ${midnight.unit}: unit card marks hours alone although another seat covers them`);
+        if (!cells.after.rows.some((r) => r.startsWith(`${midnight.mateName}|`) && r.endsWith(`|${midnight.mateTime}`))) fail(`day ${midnight.day} ${midnight.unit}: unit card lacks the carried row ${midnight.mateName} ${midnight.mateTime} from day ${midnight.day - 1} (${cells.after.rows.join("; ") || "none"})`);
+        const chips = page.locator(".tsm-chip");
+        const selectedChip = await page.evaluate(() => [...document.querySelectorAll(".tsm-chip")].findIndex((c) => c.classList.contains("tsm-chip-selected")));
+        await chips.nth(midnight.dayIndex - 1).click();
+        await page.waitForTimeout(200);
+        await page.locator('.tsm-unit[data-tsm-probe="before"]').screenshot({ path: join(outDir, `${name}-after-midnight-unit.png`) });
+        await chips.nth(midnight.dayIndex).click();
+        await page.waitForTimeout(200);
+        await page.locator('.tsm-unit[data-tsm-probe="after"]').screenshot({ path: join(outDir, `${name}-after-midnight-unit-2.png`) });
+        if (selectedChip >= 0) { await chips.nth(selectedChip).click(); await page.waitForTimeout(200); }
+        console.log(`  midnight unit cards: day ${midnight.day - 1} carries ${cells.before.rows.join("; ")}${cells.before.gaps.length ? ` with ${cells.before.gaps.join(", ")} alone` : ""}; day ${midnight.day} carries ${cells.after.rows.join("; ")}`);
+        }
+        console.log(`  midnight cards: day ${midnight.day} ${midnight.unit} ${midnight.time} lists ${midnight.mateName} ${midnight.mateTime} from the day before; day ${midnight.day - 1} ${midnight.mateTime} lists ${midnight.name} ${midnight.time}${midnight.aloneBefore ? ` and ${midnight.aloneBefore} alone` : ""}`);
+      } else {
+        console.log("  (no seat starting at midnight after an overnight seat on the same unit; midnight cards not exercised)");
+      }
 
       // Calendar with nothing typed: no dots, a hint instead.
       await page.locator(".tsm-calbtn").click();
