@@ -637,7 +637,8 @@ html[data-tsm="on"] .calendar-legend-color {
   border-radius: 3px;
 }
 
-html[data-tsm-base] .tsm-unit:not(.tsm-base-match) {
+html[data-tsm-base] .tsm-unit:not(.tsm-base-match),
+html[data-tsm-base] table.tsm-shift:not(.tsm-base-match) {
   display: none !important;
 }
 

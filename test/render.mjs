@@ -82,6 +82,8 @@ async function parseUnitFixture(context, path) {
 const mins = (t) => { const m = /(\d{1,2}):(\d{2})\s*([ap])?/i.exec(t); let h = Number(m[1]); if (m[3]) h = (h % 12) + (m[3].toLowerCase() === "p" ? 12 : 0); return h * 60 + Number(m[2]); };
 const rng = (t) => { const [a, b] = t.split("-"); const s = mins(a); let e = mins(b); if (e <= s) e += 1440; return [s, e]; };
 const ov = (a, b) => Math.min(a[1], b[1]) - Math.max(a[0], b[0]);
+// The add-on's base rule: the first word of a unit name, before any space or hyphen.
+const baseOf = (text) => text.replace(/\s*\(.*\)$/, "").split(/[\s-]/)[0];
 const halves = (t) => { const m = /^(.*?)\s*\((.*)\)$/.exec(t); return (m ? [m[1], m[2]] : [t, ""]).map((s) => s.toLowerCase()); };
 
 // A unit's seats on a day plus the same unit's seats on the days either side,
@@ -877,6 +879,51 @@ for (const { file, asDispatch } of jobs) {
     await page.evaluate(() => window.scrollTo(0, 0));
   }
 
+  // Your month: the Base dropdown beside the month picker keeps only your
+  // shifts at that base, and days left without one fold up.
+  if (after.mode === "agenda") {
+    const agendaBase = await page.evaluate((baseOfSrc) => {
+      const baseOf = new Function(`return (${baseOfSrc})`)();
+      const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+      const counts = new Map();
+      for (const t of document.querySelectorAll("table.tsm-shift")) {
+        const b = baseOf(tidy(t.querySelector("tr.tsm-shift-main td")?.textContent || ""));
+        counts.set(b, (counts.get(b) || 0) + 1);
+      }
+      const sel = document.querySelector(".tsm-nav-right > .tsm-baseselect");
+      return {
+        expected: ["All bases", ...[...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([n]) => n)],
+        shown: sel ? [...sel.options].map((o) => o.textContent) : null,
+        shifts: document.querySelectorAll("table.tsm-shift").length,
+      };
+    }, baseOf.toString());
+    if (agendaBase.shifts && JSON.stringify(agendaBase.shown) !== JSON.stringify(agendaBase.expected)) fail(`your-month base options read ${agendaBase.shown?.join(", ")}, expected ${agendaBase.expected.join(", ")}`);
+    if (agendaBase.shifts) {
+      const pick = agendaBase.expected[1];
+      await page.evaluate((v) => { const s = document.querySelector(".tsm-baseselect"); s.value = v; s.dispatchEvent(new Event("change", { bubbles: true })); }, pick.toLowerCase());
+      await page.waitForTimeout(200);
+      const picked = await page.evaluate(([base, baseOfSrc]) => {
+        const baseOf = new Function(`return (${baseOfSrc})`)();
+        const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+        const tables = [...document.querySelectorAll("table.tsm-shift")];
+        const visible = tables.filter((t) => t.offsetParent !== null);
+        const wrong = visible.filter((t) => baseOf(tidy(t.querySelector("tr.tsm-shift-main td").textContent)) !== base).length;
+        const days = [...document.querySelectorAll('table.month td[id^="day_"]')];
+        const foldedWrong = days.filter((td) => td.classList.contains("tsm-empty") !== !td.querySelector("table.tsm-shift:not([style*='display: none'])") && td.classList.contains("tsm-empty") !== ![...td.querySelectorAll("table.tsm-shift")].some((t) => t.offsetParent !== null)).length;
+        return { visible: visible.length, total: tables.length, wrong, foldedWrong, stored: localStorage.getItem("tsm.base") };
+      }, [pick, baseOf.toString()]);
+      if (picked.wrong || picked.visible === 0 || picked.visible === picked.total && agendaBase.expected.length > 2) fail(`your-month base "${pick}": ${picked.visible} of ${picked.total} shifts shown, ${picked.wrong} at other bases`);
+      if (picked.foldedWrong) fail(`${picked.foldedWrong} day rows not folded to match their remaining shifts`);
+      if (picked.stored !== pick.toLowerCase()) fail("your-month base choice not stored");
+      console.log(`  your-month base filter: ${agendaBase.expected.length - 1} bases; "${pick}" leaves ${picked.visible} of ${picked.total} shifts`);
+      await page.screenshot({ path: join(outDir, `${name}-after-base.png`) });
+      await page.evaluate(() => { const s = document.querySelector(".tsm-baseselect"); s.value = ""; s.dispatchEvent(new Event("change", { bubbles: true })); });
+      await page.waitForTimeout(200);
+      const reset = await page.evaluate(() => ({ attr: document.documentElement.dataset.tsmBase || "", visible: [...document.querySelectorAll("table.tsm-shift")].filter((t) => t.offsetParent !== null).length }));
+      if (reset.attr || reset.visible !== picked.total) fail(`All bases did not restore your month: ${JSON.stringify(reset)}`);
+    }
+  }
+
   // The Today button lands today's row just under the fixed site header.
   if (after.mode === "agenda" && await page.locator(".tsm-fab").count()) {
     await page.locator(".tsm-fab").click();
@@ -1218,7 +1265,6 @@ for (const { file, asDispatch } of jobs) {
     // Base filter: a dropdown of the leading unit names, most units first,
     // in the toolbar row with the month and year pickers; one base leaves
     // only its units and the day chips count that base's open shifts.
-    const baseOf = (text) => text.replace(/\s*\(.*\)$/, "").split(/[\s-]/)[0];
     const bases = await page.evaluate((baseOfSrc) => {
       const baseOf = new Function(`return (${baseOfSrc})`)();
       const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
