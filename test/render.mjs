@@ -910,11 +910,10 @@ for (const { file, asDispatch } of jobs) {
         const wrong = visible.filter((t) => baseOf(tidy(t.querySelector("tr.tsm-shift-main td").textContent)) !== base).length;
         const days = [...document.querySelectorAll('table.month td[id^="day_"]')];
         const foldedWrong = days.filter((td) => td.classList.contains("tsm-empty") !== !td.querySelector("table.tsm-shift:not([style*='display: none'])") && td.classList.contains("tsm-empty") !== ![...td.querySelectorAll("table.tsm-shift")].some((t) => t.offsetParent !== null)).length;
-        return { visible: visible.length, total: tables.length, wrong, foldedWrong, stored: localStorage.getItem("tsm.base") };
+        return { visible: visible.length, total: tables.length, wrong, foldedWrong };
       }, [pick, baseOf.toString()]);
       if (picked.wrong || picked.visible === 0 || picked.visible === picked.total && agendaBase.expected.length > 2) fail(`your-month base "${pick}": ${picked.visible} of ${picked.total} shifts shown, ${picked.wrong} at other bases`);
       if (picked.foldedWrong) fail(`${picked.foldedWrong} day rows not folded to match their remaining shifts`);
-      if (picked.stored !== pick.toLowerCase()) fail("your-month base choice not stored");
       console.log(`  your-month base filter: ${agendaBase.expected.length - 1} bases; "${pick}" leaves ${picked.visible} of ${picked.total} shifts`);
       await page.screenshot({ path: join(outDir, `${name}-after-base.png`) });
       await page.evaluate(() => { const s = document.querySelector(".tsm-baseselect"); s.value = ""; s.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -1303,12 +1302,13 @@ for (const { file, asDispatch } of jobs) {
         const day = document.querySelector('td[id^="day_"].tsm-selected');
         const visible = [...day.querySelectorAll(".tsm-unit")].filter((u) => u.offsetParent !== null);
         const wrong = visible.filter((u) => { const h = u.querySelector("div.location"); return baseOf(h.dataset.tsmFull || tidy(h.textContent)) !== base; }).length;
-        return { visible: visible.length, wrong, stored: localStorage.getItem("tsm.base"), attr: document.documentElement.dataset.tsmBase };
+        return { visible: visible.length, wrong, attr: document.documentElement.dataset.tsmBase, kept: localStorage.getItem("tsm.base") };
       }, [pick, baseOf.toString()]);
       const expectedChips = bases.dayIds.map((id) => bases.openBy[`${id}|${pick}`] || 0);
       const chips = await chipCounts();
       if (picked.wrong) fail(`base "${pick}" shows ${picked.wrong} units of other bases`);
-      if (picked.attr !== pick.toLowerCase() || picked.stored !== pick.toLowerCase()) fail(`base choice not applied or stored: ${JSON.stringify(picked)}`);
+      if (picked.attr !== pick.toLowerCase()) fail(`base choice not applied: ${JSON.stringify(picked)}`);
+      if (picked.kept !== null) fail("base choice must not be remembered across page loads");
       if (JSON.stringify(chips) !== JSON.stringify(expectedChips)) fail(`day chips under base "${pick}": ${chips.join(",")}, expected ${expectedChips.join(",")}`);
       console.log(`  base filter: ${bases.expected.length - 1} bases (${bases.expected.slice(1, 6).join(", ")}); "${pick}" leaves ${picked.visible} units on the selected day`);
       await page.screenshot({ path: join(outDir, `${name}-after-base.png`) });

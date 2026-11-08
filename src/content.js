@@ -1506,7 +1506,8 @@
 
   // The same Base dropdown as the unit views, beside the month picker,
   // keyed off each shift's unit name; a base leaves only your shifts there
-  // and days left without one fold up like free days.
+  // and days left without one fold up like free days. Every page load
+  // starts on all bases.
   function buildAgendaBaseFilter(days) {
     const right = document.querySelector(".tsm-nav-right");
     if (!right) return;
@@ -1536,21 +1537,10 @@
       for (const td of days) {
         td.classList.toggle("tsm-empty", td.dataset.tsmBlank === "1" || !td.querySelector(key ? "table.tsm-shift.tsm-base-match" : "table.tsm-shift"));
       }
-      try {
-        localStorage.setItem("tsm.base", key);
-      } catch {
-        // storage may be unavailable; the filter still applies for this page
-      }
     };
     select.addEventListener("change", () => setBase(select.value));
     right.prepend(select);
-    let saved = "";
-    try {
-      saved = localStorage.getItem("tsm.base") || "";
-    } catch {
-      // no storage; start on all bases
-    }
-    setBase(names.some((n) => n.toLowerCase() === saved) ? saved : "");
+    setBase("");
   }
 
   // "Alpha 3W (A-58)" is at Alpha and "MWT-W1" at MWT: the first word of
@@ -1981,21 +1971,7 @@
           badge.hidden = open === 0;
         }
       });
-      try {
-        localStorage.setItem("tsm.base", key);
-      } catch {
-        // storage may be unavailable; the filter still applies for this page
-      }
       updateStatus();
-    }
-
-    function savedBase() {
-      try {
-        const v = localStorage.getItem("tsm.base") || "";
-        return baseNames.some((n) => n.toLowerCase() === v) ? v : "";
-      } catch {
-        return "";
-      }
     }
 
     // Every word typed must start a word of the name, so "bob smi" finds
@@ -2254,7 +2230,7 @@
       if (e.key === "Escape") closePopup();
     });
 
-    setBase(savedBase());
+    setBase("");
 
     const todayIndex = days.findIndex((td) => td.classList.contains("tsm-today"));
     select(todayIndex >= 0 ? todayIndex : 0, { scroll: false });
