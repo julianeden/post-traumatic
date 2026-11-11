@@ -15,5 +15,6 @@ Phone widths only (820px and under), except the login username.
 - **Odometer** accepts any reading at or above the last one.
 - **Punch clock** is one big button. More than 7 minutes early asks first.
 - **Overtime form** (after a late punch out) shows the shift and how late the punch was, with full-width fields.
+- **Memo sign-off** (the page shown at login while a memo awaits your signature) is a memo card under its subject and sender, with a full-width employee-number box and button. The quick links give way to the logo there, as the site gives that page no menus.
 - **Dialogs** fit the phone.
 - **Privacy**: nothing leaves traumasoft.com.

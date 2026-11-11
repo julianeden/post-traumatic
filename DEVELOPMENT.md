@@ -19,6 +19,10 @@ src/
                   remembers the login username
   icons/
 test/render.mjs   renders saved pages at phone width and checks the result
+test/mht.mjs      unpacks a page a phone saved as .mht into a fixture
+test/preview.mjs  writes a fixture as the add-on leaves it, to open without the add-on
+test/run-fixture.mjs  opens a fixture in desktop Firefox with the add-on loaded
+test/splice.mjs   rebuilds clean More Options fixtures from tainted saves
 ```
 
 ## Build
@@ -37,7 +41,8 @@ choose "Web Page, complete", and save into `test/fixtures/` (gitignored), or
 anywhere and point `TSM_FIXTURES` at the folder. Save one file per view you
 care about, e.g. the Individual Month View and the BLS Vehicle/Location view.
 Save the login page too, as a file called `login` (no extension), to exercise
-the username memory, and the punch clock page as `punchClockPage.html`.
+the username memory, the punch clock page as `punchClockPage.html`, and the
+memo sign-off page the site shows at login as `memoAlert.html`.
 Save pages with the add-on disabled: a page saved while it was running
 already contains its markup and is skipped.
 
@@ -48,6 +53,19 @@ section's form served inline; save them as `shiftSubstitution.html`,
 with the add-on running, `node test/splice.mjs ~/Desktop/Schedule test/fixtures`
 rebuilds clean copies from the clean `Schedule.html` save (link the `*_files`
 folders into `test/fixtures` too).
+
+A page only a phone shows (the memo sign-off) can be saved there by Chrome
+as a single `.mht` file; `node test/mht.mjs "<saved>.mht" <folder>/<name>.html`
+unpacks it into the page and a `<name>_files` folder, the shape of a Firefox
+save, with the page's links to its stylesheets and images rewritten.
+
+To look at the result without the add-on installed (a page that only
+turns up now and then, say), `node test/preview.mjs <folder>/<name>.html`
+writes `<name>-restyled.html` beside the fixture, with the add-on's work
+baked into the markup and its stylesheet inline, and `<name>-preview.html`,
+which shows the saved page and the restyled one side by side at phone
+size. Given the `.mht` as a second argument it also writes
+`<name>-restyled.mht` next to that file, which Chrome on the phone opens.
 
 ```sh
 npm test
@@ -74,8 +92,10 @@ four buttons with working menus and the rest of the header hidden, and that
 the form pages fit the phone with full-width controls and an odometer field
 that keeps no upper limit even after a shift change, and that the overtime
 form (served after a late punch out) shows its summary card, stacks its
-fields full width and still reveals the reason-specific rows. Screenshots of
-every state land in `test/out/`.
+fields full width and still reveals the reason-specific rows, and that the
+memo sign-off page shows the memo as a card with its words unchanged, a
+full-width employee-number box and button that still post, and the logo in
+place of the quick links. Screenshots of every state land in `test/out/`.
 
 ## iPhone: the userscript build
 
@@ -138,7 +158,15 @@ the phone: Settings, About Firefox, tap the logo five times, then Settings,
 ```sh
 npm run run:desktop   # desktop Firefox with a phone user agent; log in, open the schedule
 npm run run:android   # phone over USB with adb
+TSM_FIXTURES=~/Desktop/Schedule npm run run:fixture -- memoAlert.html   # a saved page instead of the site
 ```
+
+`run:fixture` serves the saved pages on localhost and starts desktop Firefox
+with the add-on, a phone user agent and a phone-sized window on the named
+page, with `fixtures.traumasoft.com` resolving to that server inside the
+profile so the content script matches; nothing reaches the real site. It is
+the way to see the add-on run on a page that only turns up now and then.
+Add `--verbose` to see the add-on's console lines in the terminal.
 
 ## Notes on the page
 

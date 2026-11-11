@@ -10,6 +10,7 @@
     "sign:listed": "web-ext sign --source-dir src --artifacts-dir dist --channel listed --amo-metadata amo-metadata.json",
     "run:desktop": "web-ext run --source-dir src --pref general.useragent.override='Mozilla/5.0 (Android 15; Mobile; rv:143.0) Gecko/143.0 Firefox/143.0'",
     "run:android": "web-ext run --source-dir src --target firefox-android --firefox-apk org.mozilla.firefox",
+    "run:fixture": "node test/run-fixture.mjs",
     "test": "node test/render.mjs",
     "build:userscript": "node build/userscript.mjs",
     "gist": "gh gist edit ded7365e07fe74e89676e93bc5901c66 -f traumasoft-mobile.user.js userscript/post-traumatic.user.js",

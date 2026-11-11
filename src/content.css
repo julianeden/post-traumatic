@@ -2686,3 +2686,215 @@ html[data-tsm="on"] .tsm-confirm-yes {
   background: #fff;
   color: #111827;
 }
+
+/* ---------- memo sign-off page: a memo to acknowledge at login ---------- */
+
+html[data-tsm-page="memo"] #main-content {
+  padding: 12px 16px 28px !important;
+}
+
+/* the site gives this page no menus; the quick links go and the logo stays */
+html[data-tsm-page="memo"] #tsm-topnav {
+  display: none !important;
+}
+
+html[data-tsm-page="memo"] #ts_menus_menu_div > .v-col > div:has(> .ts-menus-logo) {
+  display: flex !important;
+}
+
+html[data-tsm-page="memo"] .ts-menus-logo {
+  display: block !important;
+  box-sizing: border-box;
+  width: auto;
+  height: 34px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+html[data-tsm-page="memo"] form.tsm-memo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1f2937;
+}
+
+html[data-tsm-page="memo"] form.tsm-memo > br,
+html[data-tsm-page="memo"] .tsm-memo-scaffold > br {
+  display: none;
+}
+
+/* the 800px frame, the dashed box and the memo table, flattened */
+html[data-tsm-page="memo"] .tsm-memo-scaffold {
+  display: block;
+  width: auto !important;
+  height: auto !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0;
+  background: none !important;
+  text-align: left !important;
+}
+
+/* the alert text and spacer rows; the from, subject and sign-off rows,
+   which the cards above and below restate */
+html[data-tsm-page="memo"] tr.tsm-memo-aside,
+html[data-tsm-page="memo"] tr.tsm-memo-meta-row,
+html[data-tsm-page="memo"] tr.tsm-memo-subject-row,
+html[data-tsm-page="memo"] tr.tsm-memo-blank,
+html[data-tsm-page="memo"] tr.tsm-memo-sign-row {
+  display: none;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-heading {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #111827;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-intro {
+  margin: -6px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #6b7280;
+}
+
+/* the memo card: the dashed box's cell, headed by subject and sender */
+html[data-tsm-page="memo"] td.tsm-memo-card {
+  display: block;
+  width: auto !important;
+  height: auto !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 14px !important;
+  border: 1px solid #dfe3e8 !important;
+  border-radius: 12px;
+  background: #fff !important;
+  text-align: left !important;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-head {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-subject {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* the memo as the author wrote it, in the page's face, wrapping to the
+   phone; the site sizes this form's cells by id */
+html[data-tsm-page="memo"] #memo_form tr.tsm-memo-body > td {
+  font-size: 16px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body * {
+  max-width: 100%;
+  font-family: inherit !important;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body p {
+  margin: 0 0 8px;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body p.tsm-memo-gap {
+  height: 6px;
+  margin: 0;
+  overflow: hidden;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body img {
+  height: auto;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body table {
+  width: auto !important;
+  table-layout: auto;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body table td {
+  white-space: normal;
+}
+
+/* the employee-number box and Sign-Off, full width */
+html[data-tsm-page="memo"] .tsm-memo-sign {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  line-height: 1.35;
+  padding: 14px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #4b5563;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-field {
+  display: block;
+  margin-top: 4px;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign input[type="text"] {
+  display: block;
+  width: 100% !important;
+  min-height: 44px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #cfd4db;
+  border-radius: 8px;
+  background: #fff;
+  font: 16px system-ui, -apple-system, Roboto, sans-serif;
+  color: #111827;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #003060;
+  color: #fff;
+  font: 700 17px system-ui, -apple-system, Roboto, sans-serif;
+}

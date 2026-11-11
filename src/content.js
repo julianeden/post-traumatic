@@ -7,7 +7,8 @@
 // pager for the location (all-units) views. On the individual view it also
 // loads the site's own unit views for the month to show who is on each of
 // your shifts. On the login page it remembers the username. On the punch
-// clock page it shows one big button and asks before an early punch.
+// clock page it shows one big button and asks before an early punch. On the
+// memo page shown at login it lays the memo and its sign-off box out as cards.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-base, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -121,6 +122,7 @@
       [() => document.getElementById("formID"), initFormPage, "form page"],
       [() => document.getElementById("vehicle_maintenance_request_dialog_form"), initFleetPage, "fleet form"],
       [isReasonFormDom, initOvertimePage, "overtime form"],
+      [isMemoPageDom, initMemoPage, "memo page"],
       [isSchedulePageDom, init, "schedule"],
     ];
     for (const [test, start, label] of pages) {
@@ -547,6 +549,139 @@
   function fmtDayShort(ms) {
     const d = new Date(ms);
     return `${WEEKDAYS[d.getDay()].slice(0, 3)} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  }
+
+  // ---- memo sign-off page --------------------------------------------------
+
+  // The page the site puts up at login while a memo awaits a signature: an
+  // 800px frame holding the alert text and, in a dashed box, the memo (from,
+  // date, subject, body) and an employee-number box. The frame and the memo
+  // table are flattened into a heading, a memo card headed by its subject
+  // and sender, and a sign-off card; the site's cells stay in the form,
+  // hidden, and the input and button move within it, so the post is unchanged.
+  function isMemoPageDom() {
+    const form = document.getElementById("memo_form");
+    return Boolean(form && form.querySelector("td.tableLineBottom"));
+  }
+
+  function initMemoPage() {
+    const form = document.getElementById("memo_form");
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "memo";
+    html.dataset.tsmReady = "1";
+    form.classList.add("tsm-memo");
+    const cards = [...new Set([...form.querySelectorAll("td.tableLineBottom")].map((td) => td.closest("table")))];
+    const frames = new Set();
+    const signRows = [];
+    for (const card of cards) {
+      const cell = card.parentElement.closest("td");
+      if (cell) cell.classList.add("tsm-memo-card");
+      flattenMemoTable(card);
+      for (let t = card.parentElement.closest("table"); t && form.contains(t); t = t.parentElement.closest("table")) frames.add(t);
+      let from = "";
+      let date = "";
+      let subject = "";
+      for (const tr of card.querySelectorAll(":scope > tbody > tr")) {
+        const cells = [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName));
+        if (tr.querySelector('input[name="sign_off"]')) {
+          tr.classList.add("tsm-memo-sign-row");
+          signRows.push(tr);
+        } else if (cells.some((c) => c.classList.contains("tableLineBottom"))) {
+          tr.classList.add("tsm-memo-subject-row");
+          subject = tidy(tr.textContent).replace(/^subject\s*:\s*/i, "");
+        } else if (!tidy(tr.textContent) && !tr.querySelector("img, table, input")) {
+          tr.classList.add("tsm-memo-blank");
+        } else if (!from && !date && cells.length >= 2 && cells.some((c) => /^from\s*:/i.test(tidy(c.textContent)))) {
+          tr.classList.add("tsm-memo-meta-row");
+          for (const c of cells) {
+            const text = tidy(c.textContent);
+            if (/^from\s*:/i.test(text)) from = text.replace(/^from\s*:\s*/i, "");
+            else if (text) date = memoDate(text);
+          }
+        } else {
+          tr.classList.add("tsm-memo-body");
+          tidyMemoBody(tr);
+        }
+      }
+      const head = el("div", "tsm-memo-head");
+      head.append(el("div", "tsm-memo-subject", subject || "Memo"));
+      const meta = [from, date].filter(Boolean).join(" · ");
+      if (meta) head.append(el("div", "tsm-memo-meta", meta));
+      card.before(head);
+    }
+    // the tables around the memos, whose rows with no memo in them are the
+    // alert text and spacers
+    for (const t of frames) {
+      flattenMemoTable(t);
+      for (const tr of t.querySelectorAll(":scope > tbody > tr")) {
+        if (!tr.querySelector("td.tableLineBottom")) tr.classList.add("tsm-memo-aside");
+      }
+    }
+    for (const tr of signRows) {
+      const box = el("div", "tsm-memo-sign");
+      box.append(el("div", "tsm-memo-sign-title", "Sign off"));
+      box.append(el("p", "tsm-memo-sign-note", `Enter your employee number to confirm you have read ${cards.length > 1 ? "these memos" : "this memo"}.`));
+      const input = tr.querySelector('input[name="sign_off"]');
+      const label = el("label", "tsm-memo-field");
+      label.append(el("span", "tsm-memo-label", "Employee number"));
+      input.setAttribute("inputmode", "numeric");
+      label.append(input);
+      box.append(label);
+      const submit = tr.querySelector('input[type="submit"], button');
+      if (submit) box.append(submit);
+      const dash = tr.closest("td.tsm-memo-card")?.closest("table");
+      (dash || tr.closest("table")).after(box);
+    }
+    const n = cards.length;
+    form.prepend(
+      el("h1", "tsm-memo-heading", n > 1 ? `${n} unsigned memos` : "Unsigned memo"),
+      el("p", "tsm-memo-intro", "Read and sign off below to get back into the site."),
+    );
+    diag.log(`memo page · ${n} memo(s) · ${signRows.length} sign-off box(es)`);
+  }
+
+  // The table, its bodies, rows and cells lose their table layout; the cell
+  // that holds a memo is the card instead.
+  function flattenMemoTable(table) {
+    table.classList.add("tsm-memo-scaffold");
+    for (const part of table.querySelectorAll(":scope > tbody, :scope > tbody > tr, :scope > tbody > tr > td, :scope > tbody > tr > th")) {
+      if (!part.classList.contains("tsm-memo-card")) part.classList.add("tsm-memo-scaffold");
+    }
+  }
+
+  // "11/10/2026 9:22am" -> "Tue Nov 10, 9:22am", with the year when it is
+  // not this one; any other shape is shown as written.
+  function memoDate(text) {
+    const ms = parseUsStamp(text);
+    if (ms === null) return text;
+    const d = new Date(ms);
+    const year = d.getFullYear() === new Date().getFullYear() ? "" : ` ${d.getFullYear()}`;
+    return `${fmtDayShort(ms)}${year}, ${fmtMinutes(d.getHours() * 60 + d.getMinutes(), true)}`;
+  }
+
+  // Memo text comes pasted from mail: runs of non-breaking spaces stand in
+  // for columns, empty paragraphs for spacing, blank lines trail the
+  // signature, and sizes under 14px would be too small on a phone.
+  function tidyMemoBody(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const text = node.textContent.replace(/[\u00a0 ]*\u00a0[\u00a0 ]*\u00a0[\u00a0 ]*/g, " ");
+      if (text !== node.textContent) node.textContent = text;
+    }
+    for (;;) {
+      let last = root;
+      while (last.lastChild) last = last.lastChild;
+      if (last === root || !(last.tagName === "BR" || (last.nodeType === Node.TEXT_NODE && !tidy(last.textContent)))) break;
+      last.remove();
+    }
+    for (const p of root.querySelectorAll("p")) {
+      if (!tidy(p.textContent) && !p.querySelector("img, table")) p.classList.add("tsm-memo-gap");
+    }
+    for (const e of root.querySelectorAll('[style*="font-size"]')) {
+      if (parseFloat(getComputedStyle(e).fontSize) < 14) e.style.fontSize = "14px";
+    }
   }
 
   // ---- punch clock page ----------------------------------------------------
@@ -1478,7 +1613,7 @@
   }
 
   function cleanName(text) {
-    return text.replace(/ /g, " ").trim().toLowerCase();
+    return text.replace(/\u00a0/g, " ").trim().toLowerCase();
   }
 
   // Words of a name, with role tags split off: "Katherine- PB/FTO Fields"

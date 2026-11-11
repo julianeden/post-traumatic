@@ -332,6 +332,98 @@ async function checkOvertimePage(page, name, after) {
   console.log("  Other marks comments required; an empty submit stays on the page");
 }
 
+// The memo sign-off page: the site's alert, frame and spacer rows are gone,
+// the memo is a card headed by its subject and sender whose text matches
+// the saved page word for word, the employee-number box and Sign-Off are
+// full width and still post from the form, and the quick links give way to
+// the logo (the site gives this page no menus).
+async function checkMemoPage(page, context, file, name, after) {
+  if (!after.active) fail("add-on did not activate on the memo page");
+  if (after.scrollWidth > VIEWPORT.width) fail(`memo page overflows: scrollWidth ${after.scrollWidth}`);
+  if (after.overflowing.length) fail(`memo elements past the right edge: ${after.overflowing.join(" | ")}`);
+  // the memo's own words, read from the saved page in a page of its own
+  const p2 = await context.newPage();
+  await p2.goto("file://" + join(fixtures, file), { waitUntil: "load", timeout: 60_000 });
+  const saved = await p2.evaluate(() => {
+    const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    const subject = document.querySelector("td.tableLineBottom");
+    const meta = [...subject.closest("tr").previousElementSibling.querySelectorAll("td")].map((td) => tidy(td.textContent));
+    return { subject: tidy(subject.textContent), meta, body: tidy(subject.closest("tr").nextElementSibling.innerText) };
+  });
+  await p2.close();
+  const st = await page.evaluate(() => {
+    const vis = (el) => Boolean(el) && el.offsetParent !== null && el.getBoundingClientRect().width > 0;
+    const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    const form = document.getElementById("memo_form");
+    const input = document.getElementById("sign_off");
+    const submit = form.querySelector('input[type="submit"]');
+    const body = form.querySelector("tr.tsm-memo-body");
+    const hidden = ["tr.tsm-memo-aside", "tr.tsm-memo-meta-row", "tr.tsm-memo-subject-row", "tr.tsm-memo-blank", "tr.tsm-memo-sign-row"];
+    return {
+      heading: tidy(document.querySelector(".tsm-memo-heading")?.textContent || ""),
+      intro: tidy(document.querySelector(".tsm-memo-intro")?.textContent || ""),
+      subject: tidy(document.querySelector(".tsm-memo-subject")?.textContent || ""),
+      meta: tidy(document.querySelector(".tsm-memo-meta")?.textContent || ""),
+      alertShown: [...form.querySelectorAll("span.hightlight")].some(vis),
+      stillShown: hidden.filter((sel) => [...form.querySelectorAll(sel)].some(vis)),
+      body: tidy(body?.innerText || ""),
+      bodyShown: vis(body),
+      nbspRuns: (body?.textContent.match(/\u00a0{2,}/g) || []).length,
+      smallText: [...(body?.querySelectorAll("*") || [])].filter((e) => vis(e) && tidy(e.textContent) && parseFloat(getComputedStyle(e).fontSize) < 14).length,
+      cardWidth: Math.round(document.querySelector("td.tsm-memo-card")?.getBoundingClientRect().width || 0),
+      input: input ? { shown: vis(input), width: Math.round(input.getBoundingClientRect().width), font: getComputedStyle(input).fontSize, inputmode: input.getAttribute("inputmode"), inForm: input.form === form, inBox: Boolean(input.closest(".tsm-memo-sign")) } : null,
+      submit: submit ? { shown: vis(submit), width: Math.round(submit.getBoundingClientRect().width), value: submit.value, inForm: submit.form === form, inBox: Boolean(submit.closest(".tsm-memo-sign")) } : null,
+      label: tidy(document.querySelector(".tsm-memo-label")?.textContent || ""),
+      navShown: [...document.querySelectorAll("#tsm-topnav .tsm-topbtn")].filter(vis).length,
+      logoShown: [...document.querySelectorAll(".ts-menus-logo")].some(vis),
+      logoHeight: Math.round(document.querySelector(".ts-menus-logo")?.getBoundingClientRect().height || 0),
+      barHeight: Math.round(document.getElementById("ts_menus_menu_div")?.getBoundingClientRect().height || 0),
+      hamburger: Boolean(document.querySelector('button[title="All Menus"]')),
+      height: document.documentElement.scrollHeight,
+    };
+  });
+  if (st.heading !== "Unsigned memo") fail(`memo heading reads "${st.heading}"`);
+  if (st.subject !== saved.subject.replace(/^subject\s*:\s*/i, "")) fail(`memo subject reads "${st.subject}", saved "${saved.subject}"`);
+  const from = saved.meta.find((t) => /^from\s*:/i.test(t))?.replace(/^from\s*:\s*/i, "");
+  if (!from || !st.meta.startsWith(`${from} · `)) fail(`memo sender line reads "${st.meta}", saved ${JSON.stringify(saved.meta)}`);
+  if (!/^.* · [A-Z][a-z]{2} [A-Z][a-z]{2} \d{1,2}(?: \d{4})?, \d{1,2}:\d{2}[ap]m$/.test(st.meta)) fail(`memo date not reworded: "${st.meta}"`);
+  if (st.alertShown) fail("the site's ALERT text is still shown");
+  if (st.stillShown.length) fail(`memo rows still shown: ${st.stillShown.join(", ")}`);
+  if (!st.bodyShown) fail("memo body hidden");
+  if (st.body !== saved.body) fail(`memo text changed:\n    now:   ${st.body.slice(0, 200)}\n    saved: ${saved.body.slice(0, 200)}`);
+  if (st.nbspRuns) fail(`${st.nbspRuns} run(s) of non-breaking spaces left in the memo`);
+  if (st.smallText) fail(`${st.smallText} element(s) of memo text under 14px`);
+  if (st.cardWidth < VIEWPORT.width - 40) fail(`memo card only ${st.cardWidth}px wide`);
+  if (!st.input || !st.input.shown || !st.input.inBox || !st.input.inForm) fail(`employee-number box: ${JSON.stringify(st.input)}`);
+  else if (st.input.width < 300 || parseFloat(st.input.font) < 16 || st.input.inputmode !== "numeric") fail(`employee-number box ${st.input.width}px/${st.input.font}, inputmode ${st.input.inputmode}`);
+  if (!st.submit || !st.submit.shown || !st.submit.inBox || !st.submit.inForm) fail(`Sign-Off button: ${JSON.stringify(st.submit)}`);
+  else if (st.submit.width < 300 || st.submit.value !== "Sign-Off") fail(`Sign-Off button ${st.submit.width}px, value "${st.submit.value}"`);
+  if (st.label !== "Employee number") fail(`field label reads "${st.label}"`);
+  if (st.navShown) fail(`${st.navShown} quick link(s) shown on the memo page`);
+  if (st.hamburger) fail("the memo page has a hamburger; the top bar rule needs revisiting");
+  if (!st.logoShown || st.logoHeight < 24 || st.logoHeight > 40) fail(`logo on the memo page: shown ${st.logoShown}, ${st.logoHeight}px tall`);
+  if (st.barHeight > 56) fail(`top bar ${st.barHeight}px tall on the memo page`);
+  console.log(`  memo page: "${st.subject}" · ${st.meta} · body ${st.body.length} chars unchanged · input ${st.input?.width}px · Sign-Off ${st.submit?.width}px · logo ${st.logoHeight}px in a ${st.barHeight}px bar · ${st.height}px tall`);
+  await page.screenshot({ path: join(outDir, `${name}-after.png`) });
+  await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
+
+  // Typed and tapped, the form posts the number and the button's value.
+  await page.evaluate(() => {
+    const form = document.getElementById("memo_form");
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      window.__tsmPost = [...new FormData(form, e.submitter).entries()].map(([k, v]) => `${k}=${v}`);
+    });
+  });
+  await page.locator("#sign_off").fill("038604");
+  await page.locator('#memo_form input[type="submit"]').click();
+  await page.waitForTimeout(200);
+  const post = await page.evaluate(() => window.__tsmPost || null);
+  if (!post || JSON.stringify(post) !== JSON.stringify(["sign_off=038604", "Submit=Sign-Off"])) fail(`sign-off posts ${JSON.stringify(post)}`);
+  else console.log(`  sign-off posts ${post.join("&")}`);
+  await page.screenshot({ path: join(outDir, `${name}-after-filled.png`) });
+}
+
 // Punch clock page: one big button, nothing else to scroll, and the
 // are-you-sure card before an early punch. The site's own flow ends in a
 // form submit (its break check is an AJAX call that is blocked here, and the
@@ -741,11 +833,14 @@ for (const { file, asDispatch } of jobs) {
       punchPage: Boolean(document.getElementById("punchin_form")),
       formPage: html.dataset.tsmPage === "form" || html.dataset.tsmPage === "fleet",
       overtimePage: html.dataset.tsmPage === "overtime",
+      memoPage: html.dataset.tsmPage === "memo",
     };
   });
   if (after.active && after.footerShown) fail("the copyright footer is still shown");
 
-  if (after.hasHeader) {
+  // The memo page hides the quick links (the site gives it no menus); its
+  // own check covers the bar there.
+  if (after.hasHeader && !after.memoPage) {
     const labels = after.nav.map((b) => b.label);
     if (JSON.stringify(labels) !== JSON.stringify(["Schedule", "Work orders", "Checklists", "Punch Clock"])) fail(`top bar buttons are ${labels.join(", ")}`);
     if (after.nav.some((b) => !b.shown)) fail("a top bar button is hidden");
@@ -827,6 +922,8 @@ for (const { file, asDispatch } of jobs) {
     await checkOvertimePage(page, name, after);
   } else if (after.formPage) {
     await checkFormPage(page, name, after);
+  } else if (after.memoPage) {
+    await checkMemoPage(page, context, file, name, after);
   } else if (!before.hasMonth) {
     console.log("  (no calendar on this page; chrome styling only)");
   } else {
@@ -1327,7 +1424,7 @@ for (const { file, asDispatch } of jobs) {
     const person = await page.evaluate(() => {
       const counts = new Map();
       for (const td of document.querySelectorAll("tr.employee > td:first-child")) {
-        const words = td.textContent.replace(/ /g, " ").trim().split(/\s+/);
+        const words = td.textContent.replace(/\u00a0/g, " ").trim().split(/\s+/);
         if (words.length < 2) continue;
         const key = `${words[0].split("-")[0]} ${words[words.length - 1]}`;
         counts.set(key, (counts.get(key) || 0) + 1);
