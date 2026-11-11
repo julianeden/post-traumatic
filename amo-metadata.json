@@ -11,7 +11,7 @@
   "version": {
     "license": "MIT",
     "release_notes": {
-      "en-US": "The Base dropdown starts on All bases on every page load instead of remembering the last choice."
+      "en-US": "The memo sign-off page shown at login is laid out for the phone: the memo as a card under its subject and sender, with a full-width employee-number box."
     }
   }
 }

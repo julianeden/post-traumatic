@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Post-Traumatic
 // @namespace    https://github.com/julianeden/post-traumatic
-// @version      1.5.12
+// @version      1.5.14
 // @description  Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.
 // @author       Julian Eden
 // @match        *://*.traumasoft.com/*
@@ -2705,6 +2705,218 @@ html[data-tsm="on"] .tsm-confirm-yes {
   background: #fff;
   color: #111827;
 }
+
+/* ---------- memo sign-off page: a memo to acknowledge at login ---------- */
+
+html[data-tsm-page="memo"] #main-content {
+  padding: 12px 16px 28px !important;
+}
+
+/* the site gives this page no menus; the quick links go and the logo stays */
+html[data-tsm-page="memo"] #tsm-topnav {
+  display: none !important;
+}
+
+html[data-tsm-page="memo"] #ts_menus_menu_div > .v-col > div:has(> .ts-menus-logo) {
+  display: flex !important;
+}
+
+html[data-tsm-page="memo"] .ts-menus-logo {
+  display: block !important;
+  box-sizing: border-box;
+  width: auto;
+  height: 34px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #fff;
+}
+
+html[data-tsm-page="memo"] form.tsm-memo {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: #1f2937;
+}
+
+html[data-tsm-page="memo"] form.tsm-memo > br,
+html[data-tsm-page="memo"] .tsm-memo-scaffold > br {
+  display: none;
+}
+
+/* the 800px frame, the dashed box and the memo table, flattened */
+html[data-tsm-page="memo"] .tsm-memo-scaffold {
+  display: block;
+  width: auto !important;
+  height: auto !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0;
+  background: none !important;
+  text-align: left !important;
+}
+
+/* the alert text and spacer rows; the from, subject and sign-off rows,
+   which the cards above and below restate */
+html[data-tsm-page="memo"] tr.tsm-memo-aside,
+html[data-tsm-page="memo"] tr.tsm-memo-meta-row,
+html[data-tsm-page="memo"] tr.tsm-memo-subject-row,
+html[data-tsm-page="memo"] tr.tsm-memo-blank,
+html[data-tsm-page="memo"] tr.tsm-memo-sign-row {
+  display: none;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-heading {
+  margin: 4px 0 0;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #111827;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-intro {
+  margin: -6px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #6b7280;
+}
+
+/* the memo card: the dashed box's cell, headed by subject and sender */
+html[data-tsm-page="memo"] td.tsm-memo-card {
+  display: block;
+  width: auto !important;
+  height: auto !important;
+  box-sizing: border-box;
+  margin: 0 !important;
+  padding: 14px !important;
+  border: 1px solid #dfe3e8 !important;
+  border-radius: 12px;
+  background: #fff !important;
+  text-align: left !important;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-head {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-subject {
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+  color: #111827;
+  overflow-wrap: anywhere;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* the memo as the author wrote it, in the page's face, wrapping to the
+   phone; the site sizes this form's cells by id */
+html[data-tsm-page="memo"] #memo_form tr.tsm-memo-body > td {
+  font-size: 16px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body * {
+  max-width: 100%;
+  font-family: inherit !important;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body p {
+  margin: 0 0 8px;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body p.tsm-memo-gap {
+  height: 6px;
+  margin: 0;
+  overflow: hidden;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body img {
+  height: auto;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body table {
+  width: auto !important;
+  table-layout: auto;
+}
+
+html[data-tsm-page="memo"] tr.tsm-memo-body table td {
+  white-space: normal;
+}
+
+/* the employee-number box and Sign-Off, full width */
+html[data-tsm-page="memo"] .tsm-memo-sign {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+  line-height: 1.35;
+  padding: 14px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #4b5563;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-field {
+  display: block;
+  margin-top: 4px;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign input[type="text"] {
+  display: block;
+  width: 100% !important;
+  min-height: 44px;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #cfd4db;
+  border-radius: 8px;
+  background: #fff;
+  font: 16px system-ui, -apple-system, Roboto, sans-serif;
+  color: #111827;
+}
+
+html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
+  display: block;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #003060;
+  color: #fff;
+  font: 700 17px system-ui, -apple-system, Roboto, sans-serif;
+}
 `;
   const style = document.createElement("style");
   style.id = "tsm-style";
@@ -2721,7 +2933,8 @@ html[data-tsm="on"] .tsm-confirm-yes {
 // pager for the location (all-units) views. On the individual view it also
 // loads the site's own unit views for the month to show who is on each of
 // your shifts. On the login page it remembers the username. On the punch
-// clock page it shows one big button and asks before an early punch.
+// clock page it shows one big button and asks before an early punch. On the
+// memo page shown at login it lays the memo and its sign-off box out as cards.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-base, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -2835,6 +3048,7 @@ html[data-tsm="on"] .tsm-confirm-yes {
       [() => document.getElementById("formID"), initFormPage, "form page"],
       [() => document.getElementById("vehicle_maintenance_request_dialog_form"), initFleetPage, "fleet form"],
       [isReasonFormDom, initOvertimePage, "overtime form"],
+      [isMemoPageDom, initMemoPage, "memo page"],
       [isSchedulePageDom, init, "schedule"],
     ];
     for (const [test, start, label] of pages) {
@@ -3261,6 +3475,139 @@ html[data-tsm="on"] .tsm-confirm-yes {
   function fmtDayShort(ms) {
     const d = new Date(ms);
     return `${WEEKDAYS[d.getDay()].slice(0, 3)} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  }
+
+  // ---- memo sign-off page --------------------------------------------------
+
+  // The page the site puts up at login while a memo awaits a signature: an
+  // 800px frame holding the alert text and, in a dashed box, the memo (from,
+  // date, subject, body) and an employee-number box. The frame and the memo
+  // table are flattened into a heading, a memo card headed by its subject
+  // and sender, and a sign-off card; the site's cells stay in the form,
+  // hidden, and the input and button move within it, so the post is unchanged.
+  function isMemoPageDom() {
+    const form = document.getElementById("memo_form");
+    return Boolean(form && form.querySelector("td.tableLineBottom"));
+  }
+
+  function initMemoPage() {
+    const form = document.getElementById("memo_form");
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "memo";
+    html.dataset.tsmReady = "1";
+    form.classList.add("tsm-memo");
+    const cards = [...new Set([...form.querySelectorAll("td.tableLineBottom")].map((td) => td.closest("table")))];
+    const frames = new Set();
+    const signRows = [];
+    for (const card of cards) {
+      const cell = card.parentElement.closest("td");
+      if (cell) cell.classList.add("tsm-memo-card");
+      flattenMemoTable(card);
+      for (let t = card.parentElement.closest("table"); t && form.contains(t); t = t.parentElement.closest("table")) frames.add(t);
+      let from = "";
+      let date = "";
+      let subject = "";
+      for (const tr of card.querySelectorAll(":scope > tbody > tr")) {
+        const cells = [...tr.children].filter((c) => /^T[DH]$/.test(c.tagName));
+        if (tr.querySelector('input[name="sign_off"]')) {
+          tr.classList.add("tsm-memo-sign-row");
+          signRows.push(tr);
+        } else if (cells.some((c) => c.classList.contains("tableLineBottom"))) {
+          tr.classList.add("tsm-memo-subject-row");
+          subject = tidy(tr.textContent).replace(/^subject\s*:\s*/i, "");
+        } else if (!tidy(tr.textContent) && !tr.querySelector("img, table, input")) {
+          tr.classList.add("tsm-memo-blank");
+        } else if (!from && !date && cells.length >= 2 && cells.some((c) => /^from\s*:/i.test(tidy(c.textContent)))) {
+          tr.classList.add("tsm-memo-meta-row");
+          for (const c of cells) {
+            const text = tidy(c.textContent);
+            if (/^from\s*:/i.test(text)) from = text.replace(/^from\s*:\s*/i, "");
+            else if (text) date = memoDate(text);
+          }
+        } else {
+          tr.classList.add("tsm-memo-body");
+          tidyMemoBody(tr);
+        }
+      }
+      const head = el("div", "tsm-memo-head");
+      head.append(el("div", "tsm-memo-subject", subject || "Memo"));
+      const meta = [from, date].filter(Boolean).join(" · ");
+      if (meta) head.append(el("div", "tsm-memo-meta", meta));
+      card.before(head);
+    }
+    // the tables around the memos, whose rows with no memo in them are the
+    // alert text and spacers
+    for (const t of frames) {
+      flattenMemoTable(t);
+      for (const tr of t.querySelectorAll(":scope > tbody > tr")) {
+        if (!tr.querySelector("td.tableLineBottom")) tr.classList.add("tsm-memo-aside");
+      }
+    }
+    for (const tr of signRows) {
+      const box = el("div", "tsm-memo-sign");
+      box.append(el("div", "tsm-memo-sign-title", "Sign off"));
+      box.append(el("p", "tsm-memo-sign-note", `Enter your employee number to confirm you have read ${cards.length > 1 ? "these memos" : "this memo"}.`));
+      const input = tr.querySelector('input[name="sign_off"]');
+      const label = el("label", "tsm-memo-field");
+      label.append(el("span", "tsm-memo-label", "Employee number"));
+      input.setAttribute("inputmode", "numeric");
+      label.append(input);
+      box.append(label);
+      const submit = tr.querySelector('input[type="submit"], button');
+      if (submit) box.append(submit);
+      const dash = tr.closest("td.tsm-memo-card")?.closest("table");
+      (dash || tr.closest("table")).after(box);
+    }
+    const n = cards.length;
+    form.prepend(
+      el("h1", "tsm-memo-heading", n > 1 ? `${n} unsigned memos` : "Unsigned memo"),
+      el("p", "tsm-memo-intro", "Read and sign off below to get back into the site."),
+    );
+    diag.log(`memo page · ${n} memo(s) · ${signRows.length} sign-off box(es)`);
+  }
+
+  // The table, its bodies, rows and cells lose their table layout; the cell
+  // that holds a memo is the card instead.
+  function flattenMemoTable(table) {
+    table.classList.add("tsm-memo-scaffold");
+    for (const part of table.querySelectorAll(":scope > tbody, :scope > tbody > tr, :scope > tbody > tr > td, :scope > tbody > tr > th")) {
+      if (!part.classList.contains("tsm-memo-card")) part.classList.add("tsm-memo-scaffold");
+    }
+  }
+
+  // "11/10/2026 9:22am" -> "Tue Nov 10, 9:22am", with the year when it is
+  // not this one; any other shape is shown as written.
+  function memoDate(text) {
+    const ms = parseUsStamp(text);
+    if (ms === null) return text;
+    const d = new Date(ms);
+    const year = d.getFullYear() === new Date().getFullYear() ? "" : ` ${d.getFullYear()}`;
+    return `${fmtDayShort(ms)}${year}, ${fmtMinutes(d.getHours() * 60 + d.getMinutes(), true)}`;
+  }
+
+  // Memo text comes pasted from mail: runs of non-breaking spaces stand in
+  // for columns, empty paragraphs for spacing, blank lines trail the
+  // signature, and sizes under 14px would be too small on a phone.
+  function tidyMemoBody(root) {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const node of nodes) {
+      const text = node.textContent.replace(/[\u00a0 ]*\u00a0[\u00a0 ]*\u00a0[\u00a0 ]*/g, " ");
+      if (text !== node.textContent) node.textContent = text;
+    }
+    for (;;) {
+      let last = root;
+      while (last.lastChild) last = last.lastChild;
+      if (last === root || !(last.tagName === "BR" || (last.nodeType === Node.TEXT_NODE && !tidy(last.textContent)))) break;
+      last.remove();
+    }
+    for (const p of root.querySelectorAll("p")) {
+      if (!tidy(p.textContent) && !p.querySelector("img, table")) p.classList.add("tsm-memo-gap");
+    }
+    for (const e of root.querySelectorAll('[style*="font-size"]')) {
+      if (parseFloat(getComputedStyle(e).fontSize) < 14) e.style.fontSize = "14px";
+    }
   }
 
   // ---- punch clock page ----------------------------------------------------
@@ -4192,7 +4539,7 @@ html[data-tsm="on"] .tsm-confirm-yes {
   }
 
   function cleanName(text) {
-    return text.replace(/ /g, " ").trim().toLowerCase();
+    return text.replace(/\u00a0/g, " ").trim().toLowerCase();
   }
 
   // Words of a name, with role tags split off: "Katherine- PB/FTO Fields"
