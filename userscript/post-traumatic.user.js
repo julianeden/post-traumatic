@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Post-Traumatic
 // @namespace    https://github.com/julianeden/post-traumatic
-// @version      1.5.14
+// @version      1.5.15
 // @description  Makes the Traumasoft schedule usable on a phone: an agenda of your shifts with crew, a one-day pager with open-shift filters and a per-person calendar for the unit views, and a remembered login username.
 // @author       Julian Eden
 // @match        *://*.traumasoft.com/*
@@ -2706,22 +2706,22 @@ html[data-tsm="on"] .tsm-confirm-yes {
   color: #111827;
 }
 
-/* ---------- memo sign-off page: a memo to acknowledge at login ---------- */
+/* ---------- memo pages: the list of unsigned memos at login, and each memo with its sign-off ---------- */
 
-html[data-tsm-page="memo"] #main-content {
+html[data-tsm-page^="memo"] #main-content {
   padding: 12px 16px 28px !important;
 }
 
 /* the site gives this page no menus; the quick links go and the logo stays */
-html[data-tsm-page="memo"] #tsm-topnav {
+html[data-tsm-page^="memo"] #tsm-topnav {
   display: none !important;
 }
 
-html[data-tsm-page="memo"] #ts_menus_menu_div > .v-col > div:has(> .ts-menus-logo) {
+html[data-tsm-page^="memo"] #ts_menus_menu_div > .v-col > div:has(> .ts-menus-logo) {
   display: flex !important;
 }
 
-html[data-tsm-page="memo"] .ts-menus-logo {
+html[data-tsm-page^="memo"] .ts-menus-logo {
   display: block !important;
   box-sizing: border-box;
   width: auto;
@@ -2731,7 +2731,7 @@ html[data-tsm-page="memo"] .ts-menus-logo {
   background: #fff;
 }
 
-html[data-tsm-page="memo"] form.tsm-memo {
+html[data-tsm-page^="memo"] form.tsm-memo {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2739,13 +2739,13 @@ html[data-tsm-page="memo"] form.tsm-memo {
   color: #1f2937;
 }
 
-html[data-tsm-page="memo"] form.tsm-memo > br,
-html[data-tsm-page="memo"] .tsm-memo-scaffold > br {
+html[data-tsm-page^="memo"] form.tsm-memo > br,
+html[data-tsm-page^="memo"] .tsm-memo-scaffold > br {
   display: none;
 }
 
 /* the 800px frame, the dashed box and the memo table, flattened */
-html[data-tsm-page="memo"] .tsm-memo-scaffold {
+html[data-tsm-page^="memo"] .tsm-memo-scaffold {
   display: block;
   width: auto !important;
   height: auto !important;
@@ -2760,15 +2760,15 @@ html[data-tsm-page="memo"] .tsm-memo-scaffold {
 
 /* the alert text and spacer rows; the from, subject and sign-off rows,
    which the cards above and below restate */
-html[data-tsm-page="memo"] tr.tsm-memo-aside,
-html[data-tsm-page="memo"] tr.tsm-memo-meta-row,
-html[data-tsm-page="memo"] tr.tsm-memo-subject-row,
-html[data-tsm-page="memo"] tr.tsm-memo-blank,
-html[data-tsm-page="memo"] tr.tsm-memo-sign-row {
+html[data-tsm-page^="memo"] tr.tsm-memo-aside,
+html[data-tsm-page^="memo"] tr.tsm-memo-meta-row,
+html[data-tsm-page^="memo"] tr.tsm-memo-subject-row,
+html[data-tsm-page^="memo"] tr.tsm-memo-blank,
+html[data-tsm-page^="memo"] tr.tsm-memo-sign-row {
   display: none;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-heading {
+html[data-tsm-page^="memo"] .tsm-memo-heading {
   margin: 4px 0 0;
   font-size: 20px;
   font-weight: 800;
@@ -2776,7 +2776,7 @@ html[data-tsm-page="memo"] .tsm-memo-heading {
   color: #111827;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-intro {
+html[data-tsm-page^="memo"] .tsm-memo-intro {
   margin: -6px 0 0;
   font-size: 14px;
   line-height: 1.35;
@@ -2784,7 +2784,7 @@ html[data-tsm-page="memo"] .tsm-memo-intro {
 }
 
 /* the memo card: the dashed box's cell, headed by subject and sender */
-html[data-tsm-page="memo"] td.tsm-memo-card {
+html[data-tsm-page^="memo"] td.tsm-memo-card {
   display: block;
   width: auto !important;
   height: auto !important;
@@ -2797,13 +2797,13 @@ html[data-tsm-page="memo"] td.tsm-memo-card {
   text-align: left !important;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-head {
+html[data-tsm-page^="memo"] .tsm-memo-head {
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid #e5e7eb;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-subject {
+html[data-tsm-page^="memo"] .tsm-memo-subject {
   font-size: 18px;
   font-weight: 800;
   line-height: 1.25;
@@ -2811,7 +2811,7 @@ html[data-tsm-page="memo"] .tsm-memo-subject {
   overflow-wrap: anywhere;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-meta {
+html[data-tsm-page^="memo"] .tsm-memo-meta {
   margin-top: 4px;
   font-size: 13px;
   color: #6b7280;
@@ -2819,42 +2819,42 @@ html[data-tsm-page="memo"] .tsm-memo-meta {
 
 /* the memo as the author wrote it, in the page's face, wrapping to the
    phone; the site sizes this form's cells by id */
-html[data-tsm-page="memo"] #memo_form tr.tsm-memo-body > td {
+html[data-tsm-page^="memo"] #memo_form tr.tsm-memo-body > td {
   font-size: 16px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
-html[data-tsm-page="memo"] tr.tsm-memo-body * {
+html[data-tsm-page^="memo"] tr.tsm-memo-body * {
   max-width: 100%;
   font-family: inherit !important;
 }
 
-html[data-tsm-page="memo"] tr.tsm-memo-body p {
+html[data-tsm-page^="memo"] tr.tsm-memo-body p {
   margin: 0 0 8px;
 }
 
-html[data-tsm-page="memo"] tr.tsm-memo-body p.tsm-memo-gap {
+html[data-tsm-page^="memo"] tr.tsm-memo-body p.tsm-memo-gap {
   height: 6px;
   margin: 0;
   overflow: hidden;
 }
 
-html[data-tsm-page="memo"] tr.tsm-memo-body img {
+html[data-tsm-page^="memo"] tr.tsm-memo-body img {
   height: auto;
 }
 
-html[data-tsm-page="memo"] tr.tsm-memo-body table {
+html[data-tsm-page^="memo"] tr.tsm-memo-body table {
   width: auto !important;
   table-layout: auto;
 }
 
-html[data-tsm-page="memo"] tr.tsm-memo-body table td {
+html[data-tsm-page^="memo"] tr.tsm-memo-body table td {
   white-space: normal;
 }
 
 /* the employee-number box and Sign-Off, full width */
-html[data-tsm-page="memo"] .tsm-memo-sign {
+html[data-tsm-page^="memo"] .tsm-memo-sign {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -2866,25 +2866,25 @@ html[data-tsm-page="memo"] .tsm-memo-sign {
   background: #fff;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-sign-title {
+html[data-tsm-page^="memo"] .tsm-memo-sign-title {
   font-size: 17px;
   font-weight: 700;
   color: #111827;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-sign-note {
+html[data-tsm-page^="memo"] .tsm-memo-sign-note {
   margin: 0;
   font-size: 14px;
   line-height: 1.35;
   color: #4b5563;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-field {
+html[data-tsm-page^="memo"] .tsm-memo-field {
   display: block;
   margin-top: 4px;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-label {
+html[data-tsm-page^="memo"] .tsm-memo-label {
   display: block;
   margin-bottom: 6px;
   font-size: 13px;
@@ -2892,7 +2892,7 @@ html[data-tsm-page="memo"] .tsm-memo-label {
   color: #4b5563;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-sign input[type="text"] {
+html[data-tsm-page^="memo"] .tsm-memo-sign input[type="text"] {
   display: block;
   width: 100% !important;
   min-height: 44px;
@@ -2906,7 +2906,7 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="text"] {
   color: #111827;
 }
 
-html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
+html[data-tsm-page^="memo"] .tsm-memo-sign input[type="submit"] {
   display: block;
   width: 100%;
   margin: 4px 0 0;
@@ -2916,6 +2916,119 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
   background: #003060;
   color: #fff;
   font: 700 17px system-ui, -apple-system, Roboto, sans-serif;
+}
+
+/* the list page: a link per memo, as a full-width row with a chevron */
+html[data-tsm-page="memo-list"] td.tsm-memo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+html[data-tsm-page="memo-list"] td.tsm-memo-list > br {
+  display: none;
+}
+
+html[data-tsm-page="memo-list"] #memo_form a.tsm-memo-link,
+html[data-tsm-page="memo-list"] #memo_form a.tsm-memo-link:visited,
+html[data-tsm-page="memo-list"] #memo_form a.tsm-memo-link:hover {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fff;
+  font: 600 16px/1.3 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  color: #111827 !important;
+  text-decoration: none !important;
+  overflow-wrap: anywhere;
+}
+
+html[data-tsm-page="memo-list"] #memo_form a.tsm-memo-link::after {
+  content: "\\203a";
+  margin-left: auto;
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1;
+  color: #9ca3af;
+}
+
+/* ---------- login page: the card fitted to the phone ---------- */
+
+/* the site gives the card and the banner above it a 450px floor, inside a
+   row padded 32px a side; the banner is a vendor advert */
+html[data-tsm-page="login"] .promo-banner-container {
+  display: none !important;
+}
+
+html[data-tsm-page="login"] .login_card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 0 14px 14px !important;
+}
+
+html[data-tsm-page="login"] .full_wh {
+  height: auto !important;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+html[data-tsm-page="login"] .full_wh > .v-row {
+  width: 100%;
+  margin: 0 !important;
+  padding: 16px 12px !important;
+}
+
+html[data-tsm-page="login"] .full_wh > .v-row > [class*="v-col"] {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+}
+
+/* the field and its button, full width; the button tall enough to tap */
+html[data-tsm-page="login"] .login_card .v-col-8,
+html[data-tsm-page="login"] .login_card .v-col-4 {
+  flex: 0 0 100% !important;
+  max-width: 100% !important;
+}
+
+html[data-tsm-page="login"] .login_card .v-btn--block {
+  min-height: 46px;
+  font-size: 15px;
+  letter-spacing: 0.04em;
+}
+
+html[data-tsm-page="login"] .login_card .form_label {
+  font-size: 13px;
+}
+
+html[data-tsm-page="login"] .login_card .identifier_chip_value {
+  font-size: 16px;
+}
+
+html[data-tsm-page="login"] .login_card a.text-decoration-underline {
+  display: inline-block;
+  padding: 6px 0;
+  font-size: 15px;
+}
+
+html[data-tsm-page="login"] .login_card .small_text {
+  margin: 0 !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+  text-align: left !important;
+  color: #555;
+}
+
+/* the build number sits in the page flow under the card, not over it */
+html[data-tsm-page="login"] .version-info {
+  position: static !important;
+  margin-top: 10px;
+  text-align: center;
+  font-size: 12px;
 }
 `;
   const style = document.createElement("style");
@@ -2932,9 +3045,10 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
 // classes, wraps bare text nodes so CSS can style them, and inserts a day
 // pager for the location (all-units) views. On the individual view it also
 // loads the site's own unit views for the month to show who is on each of
-// your shifts. On the login page it remembers the username. On the punch
-// clock page it shows one big button and asks before an early punch. On the
-// memo page shown at login it lays the memo and its sign-off box out as cards.
+// your shifts. On the login page it fits the card to the phone and remembers
+// the username. On the punch clock page it shows one big button and asks
+// before an early punch. On the memo pages shown at login it lays the list
+// of unsigned memos, and each memo with its sign-off box, out as cards.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-base, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -3008,6 +3122,11 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
 
   function onReady() {
     if (document.getElementById("loginApp")) {
+      if (isPhoneWidth()) {
+        html.dataset.tsm = "on";
+        html.dataset.tsmPage = "login";
+        html.dataset.tsmReady = "1";
+      }
       rememberLogin();
       return;
     }
@@ -3049,6 +3168,7 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
       [() => document.getElementById("vehicle_maintenance_request_dialog_form"), initFleetPage, "fleet form"],
       [isReasonFormDom, initOvertimePage, "overtime form"],
       [isMemoPageDom, initMemoPage, "memo page"],
+      [isMemoListDom, initMemoListPage, "memo list"],
       [isSchedulePageDom, init, "schedule"],
     ];
     for (const [test, start, label] of pages) {
@@ -3477,7 +3597,7 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
     return `${WEEKDAYS[d.getDay()].slice(0, 3)} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
   }
 
-  // ---- memo sign-off page --------------------------------------------------
+  // ---- memo pages ----------------------------------------------------------
 
   // The page the site puts up at login while a memo awaits a signature: an
   // 800px frame holding the alert text and, in a dashed box, the memo (from,
@@ -3564,6 +3684,37 @@ html[data-tsm-page="memo"] .tsm-memo-sign input[type="submit"] {
       el("p", "tsm-memo-intro", "Read and sign off below to get back into the site."),
     );
     diag.log(`memo page · ${n} memo(s) · ${signRows.length} sign-off box(es)`);
+  }
+
+  // The list the site puts up first while memos await signatures: the same
+  // 800px frame holding the alert text and, in a nested table, a link per
+  // memo. The frame is flattened into a heading and full-width links; the
+  // site's rows stay in the form, hidden.
+  function isMemoListDom() {
+    const form = document.getElementById("memo_form");
+    return Boolean(form && !form.querySelector("td.tableLineBottom") && form.querySelector('a[href*="memo_alert"][href*="id="]'));
+  }
+
+  function initMemoListPage() {
+    const form = document.getElementById("memo_form");
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "memo-list";
+    html.dataset.tsmReady = "1";
+    form.classList.add("tsm-memo");
+    const links = [...form.querySelectorAll('a[href*="memo_alert"][href*="id="]')];
+    const cells = [...new Set(links.map((a) => a.closest("td")))];
+    for (const t of form.querySelectorAll("table")) flattenMemoTable(t);
+    for (const tr of form.querySelectorAll("tr")) {
+      if (!cells.some((td) => tr.contains(td))) tr.classList.add("tsm-memo-aside");
+    }
+    for (const td of cells) td.classList.add("tsm-memo-list");
+    for (const a of links) a.classList.add("tsm-memo-link");
+    const n = links.length;
+    form.prepend(
+      el("h1", "tsm-memo-heading", n > 1 ? `${n} unsigned memos` : "Unsigned memo"),
+      el("p", "tsm-memo-intro", n > 1 ? "Open each memo, read it and sign off to get back into the site." : "Open the memo, read it and sign off to get back into the site."),
+    );
+    diag.log(`memo list · ${n} memo(s)`);
   }
 
   // The table, its bodies, rows and cells lose their table layout; the cell

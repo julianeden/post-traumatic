@@ -6,9 +6,10 @@
 // classes, wraps bare text nodes so CSS can style them, and inserts a day
 // pager for the location (all-units) views. On the individual view it also
 // loads the site's own unit views for the month to show who is on each of
-// your shifts. On the login page it remembers the username. On the punch
-// clock page it shows one big button and asks before an early punch. On the
-// memo page shown at login it lays the memo and its sign-off box out as cards.
+// your shifts. On the login page it fits the card to the phone and remembers
+// the username. On the punch clock page it shows one big button and asks
+// before an early punch. On the memo pages shown at login it lays the list
+// of unsigned memos, and each memo with its sign-off box, out as cards.
 //
 // State is kept in data attributes on <html> (data-tsm, data-tsm-mode,
 // data-tsm-base, data-tsm-name, data-tsm-cal); the stylesheet keys off those.
@@ -82,6 +83,11 @@
 
   function onReady() {
     if (document.getElementById("loginApp")) {
+      if (isPhoneWidth()) {
+        html.dataset.tsm = "on";
+        html.dataset.tsmPage = "login";
+        html.dataset.tsmReady = "1";
+      }
       rememberLogin();
       return;
     }
@@ -123,6 +129,7 @@
       [() => document.getElementById("vehicle_maintenance_request_dialog_form"), initFleetPage, "fleet form"],
       [isReasonFormDom, initOvertimePage, "overtime form"],
       [isMemoPageDom, initMemoPage, "memo page"],
+      [isMemoListDom, initMemoListPage, "memo list"],
       [isSchedulePageDom, init, "schedule"],
     ];
     for (const [test, start, label] of pages) {
@@ -551,7 +558,7 @@
     return `${WEEKDAYS[d.getDay()].slice(0, 3)} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
   }
 
-  // ---- memo sign-off page --------------------------------------------------
+  // ---- memo pages ----------------------------------------------------------
 
   // The page the site puts up at login while a memo awaits a signature: an
   // 800px frame holding the alert text and, in a dashed box, the memo (from,
@@ -638,6 +645,37 @@
       el("p", "tsm-memo-intro", "Read and sign off below to get back into the site."),
     );
     diag.log(`memo page · ${n} memo(s) · ${signRows.length} sign-off box(es)`);
+  }
+
+  // The list the site puts up first while memos await signatures: the same
+  // 800px frame holding the alert text and, in a nested table, a link per
+  // memo. The frame is flattened into a heading and full-width links; the
+  // site's rows stay in the form, hidden.
+  function isMemoListDom() {
+    const form = document.getElementById("memo_form");
+    return Boolean(form && !form.querySelector("td.tableLineBottom") && form.querySelector('a[href*="memo_alert"][href*="id="]'));
+  }
+
+  function initMemoListPage() {
+    const form = document.getElementById("memo_form");
+    html.dataset.tsm = "on";
+    html.dataset.tsmPage = "memo-list";
+    html.dataset.tsmReady = "1";
+    form.classList.add("tsm-memo");
+    const links = [...form.querySelectorAll('a[href*="memo_alert"][href*="id="]')];
+    const cells = [...new Set(links.map((a) => a.closest("td")))];
+    for (const t of form.querySelectorAll("table")) flattenMemoTable(t);
+    for (const tr of form.querySelectorAll("tr")) {
+      if (!cells.some((td) => tr.contains(td))) tr.classList.add("tsm-memo-aside");
+    }
+    for (const td of cells) td.classList.add("tsm-memo-list");
+    for (const a of links) a.classList.add("tsm-memo-link");
+    const n = links.length;
+    form.prepend(
+      el("h1", "tsm-memo-heading", n > 1 ? `${n} unsigned memos` : "Unsigned memo"),
+      el("p", "tsm-memo-intro", n > 1 ? "Open each memo, read it and sign off to get back into the site." : "Open the memo, read it and sign off to get back into the site."),
+    );
+    diag.log(`memo list · ${n} memo(s)`);
   }
 
   // The table, its bodies, rows and cells lose their table layout; the cell

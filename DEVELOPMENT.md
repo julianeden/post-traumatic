@@ -16,7 +16,7 @@ src/
   manifest.json   Manifest V3, Firefox 142+
   content.css     all styling, scoped to html[data-tsm="on"]
   content.js      adds classes, wraps the day numbers, builds the pager and calendar,
-                  remembers the login username
+                  fits the login card and remembers the login username
   icons/
 test/render.mjs   renders saved pages at phone width and checks the result
 test/mht.mjs      unpacks a page a phone saved as .mht into a fixture
@@ -41,8 +41,12 @@ choose "Web Page, complete", and save into `test/fixtures/` (gitignored), or
 anywhere and point `TSM_FIXTURES` at the folder. Save one file per view you
 care about, e.g. the Individual Month View and the BLS Vehicle/Location view.
 Save the login page too, as a file called `login` (no extension), to exercise
-the username memory, the punch clock page as `punchClockPage.html`, and the
-memo sign-off page the site shows at login as `memoAlert.html`.
+the username memory, and its two steps as `login1.html` (username) and
+`login2.html` (password) for the layout; the punch clock page as
+`punchClockPage.html`; and the memo pages the site shows at login as
+`memoNotification.html` (the list of unsigned memos) and `memoAlert.html`
+(one memo with its sign-off box). A saved password step carries the typed
+password in its field's value attribute; blank it.
 Save pages with the add-on disabled: a page saved while it was running
 already contains its markup and is skipped.
 
@@ -93,9 +97,13 @@ the form pages fit the phone with full-width controls and an odometer field
 that keeps no upper limit even after a shift change, and that the overtime
 form (served after a late punch out) shows its summary card, stacks its
 fields full width and still reveals the reason-specific rows, and that the
-memo sign-off page shows the memo as a card with its words unchanged, a
-full-width employee-number box and button that still post, and the logo in
-place of the quick links. Screenshots of every state land in `test/out/`.
+memo list shows a full-width link per memo with the saved addresses and
+wording, the memo sign-off page shows the memo as a card with its words
+unchanged, a full-width employee-number box and button that still post, and
+both show the logo in place of the quick links, and that the login page at
+either step keeps its card within the screen with the field and button full
+width and the vendor banner gone. Screenshots of every state land in
+`test/out/`.
 
 ## iPhone: the userscript build
 

@@ -142,7 +142,7 @@ async function serveFixtures(context, blocked) {
     if (url.protocol === "file:") return route.continue();
     if (url.origin === ORIGIN) {
       let file = null;
-      if (url.pathname === "/main.php" && url.searchParams.get("fixture")) file = url.searchParams.get("fixture");
+      if ((url.pathname === "/main.php" || url.pathname === "/login.php") && url.searchParams.get("fixture")) file = url.searchParams.get("fixture");
       else if (url.pathname === "/login.php") file = "login";
       else if (/^\/[^/]+_files\//.test(url.pathname)) file = decodeURIComponent(url.pathname.slice(1));
       const path = file && join(fixtures, file);
@@ -424,6 +424,122 @@ async function checkMemoPage(page, context, file, name, after) {
   await page.screenshot({ path: join(outDir, `${name}-after-filled.png`) });
 }
 
+// Memo list page: a heading and a full-width link per memo, with the saved
+// links' addresses and wording, the site's alert text and the quick links
+// hidden, and the form's CSRF field kept.
+async function checkMemoListPage(page, context, file, name, after) {
+  if (!after.active) fail("add-on did not activate on the memo list page");
+  if (after.scrollWidth > VIEWPORT.width) fail(`memo list overflows: scrollWidth ${after.scrollWidth}`);
+  if (after.overflowing.length) fail(`memo list elements past the right edge: ${after.overflowing.join(" | ")}`);
+  const p2 = await context.newPage();
+  await p2.goto("file://" + join(fixtures, file), { waitUntil: "load", timeout: 60_000 });
+  const saved = await p2.evaluate(() => {
+    const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    return {
+      links: [...document.querySelectorAll('#memo_form a[href*="memo_alert"]')].map((a) => ({ href: a.getAttribute("href"), text: tidy(a.textContent) })),
+      count: Number(/you have (\d+) un-signed memo/.exec(document.getElementById("memo_form").textContent)?.[1] || 0),
+    };
+  });
+  await p2.close();
+  const st = await page.evaluate(() => {
+    const vis = (el) => Boolean(el) && el.offsetParent !== null && el.getBoundingClientRect().width > 0;
+    const tidy = (t) => t.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+    const form = document.getElementById("memo_form");
+    return {
+      heading: tidy(document.querySelector(".tsm-memo-heading")?.textContent || ""),
+      intro: tidy(document.querySelector(".tsm-memo-intro")?.textContent || ""),
+      alertShown: [...form.querySelectorAll("span.hightlight")].some(vis),
+      asideShown: [...form.querySelectorAll("tr.tsm-memo-aside")].filter(vis).length,
+      newIconShown: [...form.querySelectorAll("img")].some(vis),
+      links: [...form.querySelectorAll("a.tsm-memo-link")].map((a) => { const r = a.getBoundingClientRect(); return { href: a.getAttribute("href"), text: tidy(a.textContent), shown: vis(a), width: Math.round(r.width), height: Math.round(r.height), left: Math.round(r.left), right: Math.round(r.right), font: getComputedStyle(a).fontSize }; }),
+      otherLinks: [...form.querySelectorAll("a:not(.tsm-memo-link)")].filter(vis).length,
+      csrf: form.querySelector('input[name="_csrf"]')?.value.length || 0,
+      navShown: [...document.querySelectorAll("#tsm-topnav .tsm-topbtn")].filter(vis).length,
+      logoShown: [...document.querySelectorAll(".ts-menus-logo")].some(vis),
+      logoHeight: Math.round(document.querySelector(".ts-menus-logo")?.getBoundingClientRect().height || 0),
+      barHeight: Math.round(document.getElementById("ts_menus_menu_div")?.getBoundingClientRect().height || 0),
+      hamburger: Boolean(document.querySelector('button[title="All Menus"]')),
+      height: document.documentElement.scrollHeight,
+    };
+  });
+  const n = saved.links.length;
+  if (!n) fail("no memo links in the saved page");
+  if (saved.count && saved.count !== n) fail(`the saved page says ${saved.count} memo(s) but links ${n}`);
+  if (st.heading !== (n > 1 ? `${n} unsigned memos` : "Unsigned memo")) fail(`memo list heading reads "${st.heading}"`);
+  if (!/^Open (the|each) memo, read it and sign off/.test(st.intro)) fail(`memo list intro reads "${st.intro}"`);
+  if (st.alertShown) fail("the site's ALERT text is still shown");
+  if (st.asideShown) fail(`${st.asideShown} frame row(s) still shown`);
+  if (st.newIconShown) fail("the 'new' envelope icon is still shown");
+  if (JSON.stringify(st.links.map((l) => [l.href, l.text])) !== JSON.stringify(saved.links.map((l) => [l.href, l.text]))) fail(`memo links changed:\n    now:   ${JSON.stringify(st.links.map((l) => [l.href, l.text]))}\n    saved: ${JSON.stringify(saved.links.map((l) => [l.href, l.text]))}`);
+  for (const l of st.links) {
+    if (!l.shown) fail(`memo link "${l.text}" hidden`);
+    else if (l.height < 44 || l.width < VIEWPORT.width - 40 || l.left < 8 || l.right > VIEWPORT.width - 8 || parseFloat(l.font) < 16) fail(`memo link "${l.text}" is ${l.width}x${l.height} at ${l.left}..${l.right}, ${l.font}`);
+  }
+  if (st.otherLinks) fail(`${st.otherLinks} other link(s) shown on the memo list`);
+  if (!st.csrf) fail("the form's CSRF field is gone");
+  if (st.navShown) fail(`${st.navShown} quick link(s) shown on the memo list`);
+  if (st.hamburger) fail("the memo list has a hamburger; the top bar rule needs revisiting");
+  if (!st.logoShown || st.logoHeight < 24 || st.logoHeight > 40) fail(`logo on the memo list: shown ${st.logoShown}, ${st.logoHeight}px tall`);
+  if (st.barHeight > 56) fail(`top bar ${st.barHeight}px tall on the memo list`);
+  console.log(`  memo list: "${st.heading}" \u00b7 ${n} link(s) unchanged, ${st.links[0]?.width}x${st.links[0]?.height} \u00b7 logo ${st.logoHeight}px in a ${st.barHeight}px bar \u00b7 ${st.height}px tall`);
+  await page.screenshot({ path: join(outDir, `${name}-after.png`) });
+  await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
+}
+
+// Login page, either step: the card within the screen with its field and
+// button full width, the vendor banner gone, the legal text readable and the
+// build number under the card rather than over it.
+async function checkLoginPage(page, name, after) {
+  if (!after.active) fail("add-on did not activate on the login page");
+  if (after.scrollWidth > VIEWPORT.width) fail(`login page overflows: scrollWidth ${after.scrollWidth}`);
+  if (after.overflowing.length) fail(`login elements past the right edge: ${after.overflowing.join(" | ")}`);
+  const st = await page.evaluate(() => {
+    const vis = (el) => Boolean(el) && el.offsetParent !== null && el.getBoundingClientRect().width > 0;
+    const rect = (el) => { const r = el ? el.getBoundingClientRect() : { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }; return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), width: Math.round(r.width), height: Math.round(r.height) }; };
+    const input = document.querySelector("[data-testid='login-identifier'] input, [data-testid='login-password'] input");
+    const button = document.querySelector("[data-testid='login-submit'], [data-testid='password-submit']");
+    const legal = document.querySelector(".small_text");
+    const chip = document.querySelector("[data-testid='identifier-readonly']");
+    const forgot = [...document.querySelectorAll("a")].find((a) => /forgot your password/i.test(a.textContent));
+    return {
+      step: document.querySelector("[data-testid='login-password']") ? "password" : "username",
+      bannerShown: vis(document.querySelector(".promo-banner-container")),
+      card: rect(document.querySelector(".login_card")),
+      logo: rect(document.querySelector(".logo_section img")),
+      input: input ? { ...rect(input), font: getComputedStyle(input).fontSize, autocomplete: input.getAttribute("autocomplete") } : null,
+      button: button ? { ...rect(button), font: getComputedStyle(button).fontSize, text: button.textContent.trim() } : null,
+      forgot: forgot ? rect(forgot) : null,
+      legal: legal ? { ...rect(legal), font: getComputedStyle(legal).fontSize } : null,
+      version: rect(document.querySelector(".version-info")),
+      chip: chip ? { ...rect(chip), text: chip.textContent.replace(/\s+/g, " ").trim() } : null,
+      height: document.documentElement.scrollHeight,
+    };
+  });
+  const W = VIEWPORT.width;
+  if (st.bannerShown) fail("the vendor banner is still shown on the login page");
+  if (st.card.left < 8 || st.card.right > W - 8 || st.card.width < W - 40) fail(`login card runs ${st.card.left}..${st.card.right} (${st.card.width}px)`);
+  if (st.logo.height < 60 || st.logo.height > 90) fail(`company logo ${st.logo.height}px tall`);
+  if (!st.input) fail("login field not found");
+  else if (st.input.width < st.card.width - 48 || st.input.height < 40 || parseFloat(st.input.font) < 16) fail(`login field ${st.input.width}x${st.input.height}, ${st.input.font}`);
+  if (!st.button) fail("login button not found");
+  else if (st.button.width < st.card.width - 48 || st.button.height < 44 || parseFloat(st.button.font) < 15) fail(`login button ${st.button.width}x${st.button.height}, ${st.button.font}`);
+  if (!st.forgot || st.forgot.height < 24) fail(`forgot-password link ${st.forgot?.height}px tall`);
+  if (!st.legal) fail("legal text not found");
+  else if (st.legal.left < st.card.left || st.legal.right > st.card.right || parseFloat(st.legal.font) < 11) fail(`legal text runs ${st.legal.left}..${st.legal.right} in a card ${st.card.left}..${st.card.right}, ${st.legal.font}`);
+  if (st.version.top < st.card.bottom || st.version.right > W) fail(`build number at ${st.version.left}..${st.version.right}, top ${st.version.top} under a card ending ${st.card.bottom}`);
+  if (st.step === "username") {
+    if (st.input?.autocomplete !== "username") fail(`username field autocomplete is "${st.input?.autocomplete}"`);
+    if (st.button?.text !== "Continue") fail(`username step button reads "${st.button?.text}"`);
+  } else {
+    if (st.input?.autocomplete !== "current-password") fail(`password field autocomplete is "${st.input?.autocomplete}"`);
+    if (st.button?.text !== "Login") fail(`password step button reads "${st.button?.text}"`);
+    if (!st.chip || !/Change$/.test(st.chip.text) || st.chip.width < 100 || st.chip.right > st.card.right) fail(`username chip: ${JSON.stringify(st.chip)}`);
+  }
+  console.log(`  login (${st.step} step): card ${st.card.width}px \u00b7 field ${st.input?.width}x${st.input?.height} \u00b7 ${st.button?.text} ${st.button?.width}x${st.button?.height} \u00b7 legal ${st.legal?.font} \u00b7 ${st.height}px tall${st.height > VIEWPORT.height ? " (scrolls)" : ""}`);
+  await page.screenshot({ path: join(outDir, `${name}-after.png`) });
+  await page.screenshot({ path: join(outDir, `${name}-after-full.png`), fullPage: true });
+}
+
 // Punch clock page: one big button, nothing else to scroll, and the
 // are-you-sure card before an early punch. The site's own flow ends in a
 // form submit (its break check is an AJAX call that is blocked here, and the
@@ -695,8 +811,13 @@ for (const { file, asDispatch } of jobs) {
   });
   // The Dispatch view is told apart by the template id its dropdown option
   // carries; naming it in the address makes a saved unit view count as Dispatch.
-  const dispatchId = asDispatch ? /template_id=(\d+)[^>]*>[^<]*Dispatch/.exec(readFileSync(join(fixtures, file), "utf8"))?.[1] : null;
-  await page.goto(`${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}${dispatchId ? `&template_id=${dispatchId}` : ""}`, { waitUntil: "load", timeout: 60_000 });
+  const source = readFileSync(join(fixtures, file), "utf8");
+  const dispatchId = asDispatch ? /template_id=(\d+)[^>]*>[^<]*Dispatch/.exec(source)?.[1] : null;
+  // a saved login page (either step) is served at the site's login address
+  const isLogin = /id="loginApp"/.test(source);
+  await page.goto(isLogin
+    ? `${ORIGIN}/login.php?fixture=${encodeURIComponent(file)}`
+    : `${ORIGIN}/main.php?a=user:schedule&fixture=${encodeURIComponent(file)}${dispatchId ? `&template_id=${dispatchId}` : ""}`, { waitUntil: "load", timeout: 60_000 });
 
   const before = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -834,13 +955,15 @@ for (const { file, asDispatch } of jobs) {
       formPage: html.dataset.tsmPage === "form" || html.dataset.tsmPage === "fleet",
       overtimePage: html.dataset.tsmPage === "overtime",
       memoPage: html.dataset.tsmPage === "memo",
+      memoListPage: html.dataset.tsmPage === "memo-list",
+      loginPage: html.dataset.tsmPage === "login",
     };
   });
   if (after.active && after.footerShown) fail("the copyright footer is still shown");
 
-  // The memo page hides the quick links (the site gives it no menus); its
-  // own check covers the bar there.
-  if (after.hasHeader && !after.memoPage) {
+  // The memo pages hide the quick links (the site gives them no menus);
+  // their own checks cover the bar there.
+  if (after.hasHeader && !after.memoPage && !after.memoListPage) {
     const labels = after.nav.map((b) => b.label);
     if (JSON.stringify(labels) !== JSON.stringify(["Schedule", "Work orders", "Checklists", "Punch Clock"])) fail(`top bar buttons are ${labels.join(", ")}`);
     if (after.nav.some((b) => !b.shown)) fail("a top bar button is hidden");
@@ -924,6 +1047,10 @@ for (const { file, asDispatch } of jobs) {
     await checkFormPage(page, name, after);
   } else if (after.memoPage) {
     await checkMemoPage(page, context, file, name, after);
+  } else if (after.memoListPage) {
+    await checkMemoListPage(page, context, file, name, after);
+  } else if (after.loginPage) {
+    await checkLoginPage(page, name, after);
   } else if (!before.hasMonth) {
     console.log("  (no calendar on this page; chrome styling only)");
   } else {

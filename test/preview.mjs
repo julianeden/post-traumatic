@@ -33,7 +33,13 @@ await context.route(() => true, (route) => {
   if (url.origin === ORIGIN && url.pathname === "/main.php") path = join(dir, file);
   else if (url.origin === ORIGIN && /^\/[^/]+_files\//.test(url.pathname)) path = join(dir, decodeURIComponent(url.pathname.slice(1)));
   if (path && path.startsWith(dir) && existsSync(path)) {
-    return route.fulfill({ status: 200, contentType: TYPES[extname(path).toLowerCase()] || "application/octet-stream", body: readFileSync(path) });
+    let body = readFileSync(path);
+    // a page saved while the add-on was running carries its bar; drop it so
+    // the script builds its own
+    if (path === join(dir, file) && body.includes("tsm-topnav")) {
+      body = Buffer.from(body.toString("utf8").replace(/<nav class="tsm-topnav"[^>]*>[\s\S]*?<\/nav>/, "").replace(/ data-tsm-chrome="on"/, ""), "utf8");
+    }
+    return route.fulfill({ status: 200, contentType: TYPES[extname(path).toLowerCase()] || "application/octet-stream", body });
   }
   return route.abort();
 });
