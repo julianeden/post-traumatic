@@ -11,7 +11,7 @@
   "version": {
     "license": "MIT",
     "release_notes": {
-      "en-US": "The memo sign-off page shown at login is laid out for the phone: the memo as a card under its subject and sender, with a full-width employee-number box."
+      "en-US": "The login page fits the phone at both steps: the card within the screen, the field and button full width, the vendor banner gone. The list of unsigned memos shown at login is a heading and a full-width link per memo."
     }
   }
 }
